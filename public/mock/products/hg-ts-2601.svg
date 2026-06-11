@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 160 160">
+  <rect width="160" height="160" rx="12" fill="#eff6ff"/>
+  <path d="M54 38l18 12h16l18-12 26 20-14 24-12-7v50H54V75l-12 7-14-24 26-20z" fill="#2563eb"/>
+  <path d="M72 50c3 7 13 7 16 0" fill="none" stroke="#dbeafe" stroke-width="5" stroke-linecap="round"/>
+  <text x="80" y="145" text-anchor="middle" font-family="Arial" font-size="14" fill="#1d4ed8">T-Shirt</text>
+</svg>

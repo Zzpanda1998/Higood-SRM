@@ -1,0 +1,2 @@
+import SimpleTablePage from "../SimpleTablePage";
+export default function RoleManagement() { return <SimpleTablePage title="角色权限" desc="MVP 简化角色权限配置。" rows={[{ role: "采购员", desc: "采购单据处理", scope: "采购管理", status: "已启用" }, { role: "采购主管", desc: "内部确认与采购执行", scope: "采购执行", status: "已启用" }, { role: "仓库人员", desc: "收货与入库", scope: "到货入库", status: "已启用" }]} columns={[{ key: "role", title: "角色名称" }, { key: "desc", title: "角色说明" }, { key: "scope", title: "权限范围" }, { key: "status", title: "状态" }]} />; }

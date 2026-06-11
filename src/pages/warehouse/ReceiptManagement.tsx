@@ -1,0 +1,3 @@
+import SimpleTablePage from "../SimpleTablePage";
+import { receipts } from "../../mock/receipts";
+export default function ReceiptManagement() { return <SimpleTablePage title="印尼仓收货管理" desc="用于印尼仓根据发货单进行收货，记录实收数量、差异数量和异常原因。" rows={receipts} columns={[{ key: "grnNo", title: "收货单号" }, { key: "asnNo", title: "发货单号" }, { key: "poNo", title: "采购订单号" }, { key: "supplier", title: "供应商" }, { key: "warehouse", title: "收货仓库" }, { key: "shipQty", title: "发货数量" }, { key: "recvQty", title: "实收数量" }, { key: "diffQty", title: "差异数量" }, { key: "abnormal", title: "是否异常" }, { key: "receiver", title: "收货人" }, { key: "status", title: "状态" }]} />; }

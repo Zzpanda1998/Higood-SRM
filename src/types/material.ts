@@ -1,0 +1,44 @@
+export type MaterialCategory = "面料" | "辅料" | "纱线" | "包材" | "耗材" | "样衣" | "成衣";
+export type MaterialStatus = "草稿" | "已启用" | "已停用";
+export type MaterialPurpose = "生产用" | "包装用" | "样衣开发" | "成衣采购" | "日常耗材";
+export type Unit = "米" | "码" | "公斤" | "个" | "件" | "卷" | "箱" | "包" | "打";
+export type Currency = "RMB" | "USD" | "IDR";
+
+export interface Material {
+  id: string;
+  materialCode: string;
+  materialName: string;
+  materialCategory: MaterialCategory;
+  specification: string;
+  materialPurpose?: MaterialPurpose;
+  styleNo?: string;
+  composition?: string;
+  weight?: string;
+  width?: string;
+  color?: string;
+  colorCode?: string;
+  size?: string;
+  baseUnit: Unit;
+  purchaseUnit: Unit;
+  inventoryUnit: Unit;
+  conversionRate?: string;
+  defaultSupplier?: string;
+  referencePurchasePrice?: number;
+  currency?: Currency;
+  minPurchaseQty?: number;
+  purchaseLeadTime?: number;
+  needInspection: boolean;
+  inspectionRequirement?: string;
+  batchManagement?: boolean;
+  colorSizeManagement?: boolean;
+  status: MaterialStatus;
+  totalPurchaseOrders?: number;
+  totalPurchaseQty?: number;
+  totalPurchaseAmount?: number;
+  recentPurchaseOrderNo?: string;
+  recentPurchaseDate?: string;
+  createdBy: string;
+  createdAt: string;
+  updatedAt?: string;
+  remark?: string;
+}

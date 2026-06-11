@@ -1,0 +1,2 @@
+import SimpleTablePage from "../SimpleTablePage";
+export default function DictionaryConfig() { return <SimpleTablePage title="字典配置" desc="MVP 简化字典配置。" rows={[{ type: "采购类型", name: "面料采购", value: "FAB", status: "已启用" }, { type: "物流方式", name: "海运", value: "SEA", status: "已启用" }, { type: "付款方式", name: "月结", value: "MONTHLY", status: "已启用" }]} columns={[{ key: "type", title: "字典类型" }, { key: "name", title: "字典名称" }, { key: "value", title: "字典值" }, { key: "status", title: "状态" }]} />; }
