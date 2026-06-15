@@ -14,6 +14,17 @@ export type TransferBatch = {
   transferCenter: string;
   destinationWarehouse: string;
   carrier: string;
+  carrierId?: string;
+  carrierCode?: string;
+  channelId?: string;
+  channelCode?: string;
+  channelName?: string;
+  transportMethod?: string;
+  estimatedTransitDays?: number;
+  billingMethod?: string;
+  taxMethod?: string;
+  feeCurrency?: "RMB" | "USD" | "IDR";
+  destinationCountry?: string;
   creator: string;
   createdAt: string;
   plannedShipDate: string;

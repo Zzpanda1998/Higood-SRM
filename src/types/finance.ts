@@ -143,7 +143,16 @@ export interface LogisticsReconciliationRow {
 
 export type MaterialPurchaseConfirmStatus = "待确认" | "部分确认" | "已确认";
 export type MaterialPurchaseType = "面料" | "辅料" | "包材" | "耗材" | "纱线";
-export type MaterialFeeItem = "采购货款" | "调整金额";
+export type MaterialFeeItem = "采购货款" | "供应商账单金额" | "调整金额" | "最终应付金额";
+
+export interface MaterialReconciliationFeeLayer {
+  unitPrice: number;
+  purchaseAmount: number;
+  supplierBillAmount: number;
+  adjustmentAmount: number;
+  finalPayableAmount: number;
+  remark?: string;
+}
 
 export interface MaterialFeeItemConfirm {
   feeItem: MaterialFeeItem;
@@ -172,15 +181,10 @@ export interface MaterialPurchaseReconciliationRow {
   arrivedQty?: number;
   inboundQty?: number;
   currency: Currency;
-  actualUnitPrice?: number;
-  actualPurchaseAmount?: number;
-  supplierBillAmount?: number;
-  differenceAmount?: number;
-  adjustmentAmount: number;
-  finalPayableAmount: number;
+  estimatedFee: MaterialReconciliationFeeLayer;
+  actualFee: MaterialReconciliationFeeLayer;
+  differenceAmount: number;
   differenceReason?: string;
-  adjustmentReason?: string;
-  remark?: string;
   confirmedBy?: string;
   confirmedAt?: string;
   confirmedItems: MaterialFeeItemConfirm[];

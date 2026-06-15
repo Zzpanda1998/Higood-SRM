@@ -7,7 +7,7 @@ import type {
 } from "../types/finance";
 
 const confirmItems = (confirmed: MaterialFeeItem[] = []) =>
-  (["采购货款", "调整金额"] as MaterialFeeItem[]).map((feeItem) => ({
+  (["采购货款", "供应商账单金额", "调整金额", "最终应付金额"] as MaterialFeeItem[]).map((feeItem) => ({
     feeItem,
     confirmed: confirmed.includes(feeItem),
     confirmedBy: confirmed.includes(feeItem) ? "王采购" : undefined,
@@ -56,8 +56,13 @@ const seeds: Seed[] = [
 
 export const initialMaterialPurchaseReconciliationRows: MaterialPurchaseReconciliationRow[] = seeds.map((seed, index) => {
   const quantity = seed.inboundQty && seed.inboundQty > 0 ? seed.inboundQty : seed.purchaseQty;
-  const actualPurchaseAmount = Number((quantity * seed.price).toFixed(2));
+  const estimatedPurchaseAmount = Number((quantity * seed.price).toFixed(2));
   const adjustmentAmount = seed.adjustment ?? 0;
+  const actualUnitPrice = seed.bill == null ? 0 : seed.price;
+  const actualPurchaseAmount = seed.bill == null ? 0 : estimatedPurchaseAmount;
+  const supplierBillAmount = seed.bill ?? 0;
+  const actualFinalPayable = Number(((supplierBillAmount > 0 ? supplierBillAmount : actualPurchaseAmount) + adjustmentAmount).toFixed(2));
+  const estimatedFinalPayable = estimatedPurchaseAmount;
   return {
     id: `material-rec-${index + 1}`,
     reconciliationNo: index < 4 ? `MREC-202606-${String(index + 1).padStart(4, "0")}` : undefined,
@@ -78,15 +83,24 @@ export const initialMaterialPurchaseReconciliationRows: MaterialPurchaseReconcil
     arrivedQty: seed.arrivedQty,
     inboundQty: seed.inboundQty,
     currency: seed.currency,
-    actualUnitPrice: seed.price,
-    actualPurchaseAmount,
-    supplierBillAmount: seed.bill,
-    differenceAmount: seed.bill == null ? undefined : Number((seed.bill - actualPurchaseAmount).toFixed(2)),
-    adjustmentAmount,
-    finalPayableAmount: Number((actualPurchaseAmount + adjustmentAmount).toFixed(2)),
+    estimatedFee: {
+      unitPrice: seed.price,
+      purchaseAmount: estimatedPurchaseAmount,
+      supplierBillAmount: 0,
+      adjustmentAmount: 0,
+      finalPayableAmount: estimatedFinalPayable,
+      remark: seed.remark,
+    },
+    actualFee: {
+      unitPrice: actualUnitPrice,
+      purchaseAmount: actualPurchaseAmount,
+      supplierBillAmount,
+      adjustmentAmount,
+      finalPayableAmount: actualFinalPayable,
+      remark: seed.remark,
+    },
+    differenceAmount: Number((actualFinalPayable - estimatedFinalPayable).toFixed(2)),
     differenceReason: seed.differenceReason,
-    adjustmentReason: seed.adjustmentReason,
-    remark: seed.remark,
     confirmedBy: seed.status === "已确认" ? "王采购" : undefined,
     confirmedAt: seed.status === "已确认" ? "2026-06-10 16:30" : undefined,
     confirmedItems: confirmItems(seed.confirmed),

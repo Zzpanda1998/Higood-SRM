@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { TransferBatch, TransferBatchStatus } from "../../types/transferBatch";
+import type { FirstLegCarrier, FirstLegCarrierChannel } from "../../types/firstLegCarrier";
 
 export interface CreateTransferBatchForm {
   batchNo: string;
@@ -8,6 +9,8 @@ export interface CreateTransferBatchForm {
   shippingType: string;
   area: string;
   logisticsCompany: string;
+  carrierId: string;
+  channelId: string;
   logisticsFeeRmb: string;
   logisticsFeeUsd: string;
   incomeTaxIdr: string;
@@ -27,6 +30,8 @@ export const defaultCreateTransferBatchForm: CreateTransferBatchForm = {
   shippingType: "",
   area: "",
   logisticsCompany: "",
+  carrierId: "",
+  channelId: "",
   logisticsFeeRmb: "",
   logisticsFeeUsd: "",
   incomeTaxIdr: "",
@@ -73,10 +78,14 @@ export default function CreateTransferBatchModal({
   open,
   onClose,
   onSubmit,
+  carriers,
+  channels,
 }: {
   open: boolean;
   onClose: () => void;
   onSubmit: (batch: TransferBatch) => void;
+  carriers: FirstLegCarrier[];
+  channels: FirstLegCarrierChannel[];
 }) {
   const [form, setForm] = useState<CreateTransferBatchForm>(defaultCreateTransferBatchForm);
   const [errors, setErrors] = useState<Errors>({});
@@ -101,6 +110,8 @@ export default function CreateTransferBatchModal({
     if (!form.warehouse) nextErrors.warehouse = "请选择仓库";
     if (!form.shippingType) nextErrors.shippingType = "请选择货运类型";
     if (!form.area) nextErrors.area = "请选择区域";
+    if (!form.carrierId) nextErrors.logisticsCompany = "请选择物流商";
+    if (!form.channelId) nextErrors.shippingType = "请选择物流渠道";
     numericFields.forEach((key) => {
       const value = form[key];
       if (!value) return;
@@ -120,6 +131,17 @@ export default function CreateTransferBatchModal({
       transferCenter: form.sourceRegion === "CN" ? "广州转运中心" : `${form.sourceRegion}转运中心`,
       destinationWarehouse: form.warehouse,
       carrier: form.shippingType,
+      carrierId: form.carrierId,
+      carrierCode: carriers.find((item) => item.id === form.carrierId)?.carrierCode,
+      channelId: form.channelId,
+      channelCode: selectedChannel?.channelCode,
+      channelName: selectedChannel?.channelName,
+      transportMethod: selectedChannel?.transportMethod,
+      estimatedTransitDays: selectedChannel?.estimatedTransitDays,
+      billingMethod: selectedChannel?.billingMethod,
+      taxMethod: selectedChannel?.taxMethod,
+      feeCurrency: selectedChannel?.feeCurrency,
+      destinationCountry: selectedChannel?.destinationCountry,
       creator: "王采购",
       createdAt: "2026-06-09 10:30",
       plannedShipDate: form.expectedBandungArrivalTime.slice(0, 10),
@@ -153,6 +175,9 @@ export default function CreateTransferBatchModal({
   };
 
   const inputClass = "h-8 w-full rounded-sm border border-gray-300 px-2 text-sm outline-none focus:border-brand";
+  const selectedChannel = channels.find((item) => item.id === form.channelId);
+  const enabledCarriers = carriers.filter((item) => item.status === "启用");
+  const enabledChannels = channels.filter((item) => item.carrierId === form.carrierId && item.status === "启用");
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/30 p-3">
@@ -169,11 +194,14 @@ export default function CreateTransferBatchModal({
             <SectionHeading title="一、基础信息" description="设置头程物流批次、线路、仓库及承运信息" />
             <div className="space-y-2">
             <FieldRow label="货运批次" required error={errors.batchNo}><input className={inputClass} value={form.batchNo} onChange={(event) => update("batchNo", event.target.value)} /></FieldRow>
+            <FieldRow label="物流商" required><select className={inputClass} value={form.carrierId} onChange={(event) => setForm((current) => ({ ...current, carrierId: event.target.value, channelId: "", logisticsCompany: carriers.find((item) => item.id === event.target.value)?.carrierName ?? "", shippingType: "" }))}><option value="">请选择启用物流商</option>{enabledCarriers.map((item) => <option key={item.id} value={item.id}>{item.carrierName}</option>)}</select></FieldRow>
+            <FieldRow label="物流渠道" required><select className={inputClass} value={form.channelId} onChange={(event) => { const channel = channels.find((item) => item.id === event.target.value); setForm((current) => ({ ...current, channelId: event.target.value, shippingType: channel?.transportMethod ?? "", area: channel?.destinationCountry ?? "", warehouse: channel?.destinationWarehouse ?? current.warehouse })); }}><option value="">请选择启用渠道</option>{enabledChannels.map((item) => <option key={item.id} value={item.id}>{item.channelName}</option>)}</select></FieldRow>
             <FieldRow label="货源地区" required error={errors.sourceRegion}><select className={inputClass} value={form.sourceRegion} onChange={(event) => update("sourceRegion", event.target.value)}><option>CN</option><option>ID</option><option>US</option></select></FieldRow>
             <FieldRow label="仓库" required error={errors.warehouse}><select className={inputClass} value={form.warehouse} onChange={(event) => update("warehouse", event.target.value)}><option value="">请选择仓库</option><option>印尼仓</option><option>广州主仓</option><option>深圳仓</option><option>面辅料仓</option><option>中转仓</option></select></FieldRow>
             <FieldRow label="货运类型" required error={errors.shippingType}><select className={inputClass} value={form.shippingType} onChange={(event) => update("shippingType", event.target.value)}><option value="">请选择货运类型</option><option>空运</option><option>海运</option><option>陆运</option><option>快递</option></select></FieldRow>
             <FieldRow label="区域" required error={errors.area}><select className={inputClass} value={form.area} onChange={(event) => update("area", event.target.value)}><option value="">请选择区域</option><option>ID</option><option>CN</option><option>CN =&gt; ID</option><option>US</option></select></FieldRow>
             <FieldRow label="货运公司"><input className={inputClass} value={form.logisticsCompany} placeholder="货运公司" onChange={(event) => update("logisticsCompany", event.target.value)} /></FieldRow>
+            {selectedChannel && <FieldRow label="渠道带出信息"><div className="rounded bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-800">运输方式：{selectedChannel.transportMethod}；预计 {selectedChannel.estimatedTransitDays} 天；计费：{selectedChannel.billingMethod}；交税：{selectedChannel.taxMethod}；币种：{selectedChannel.feeCurrency}</div></FieldRow>}
             </div>
           </section>
           <section className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">

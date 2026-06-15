@@ -24,7 +24,9 @@ import IdMaterialPurchaseOrder from "./pages/material-purchase/IdMaterialPurchas
 import MaterialPurchaseTracking, { createMaterialLogisticsRows } from "./pages/material-purchase/MaterialPurchaseTracking";
 import type { JoinHeadLogisticsPayload } from "./pages/material-purchase/JoinHeadLogisticsModal";
 import TransferBatchManagement from "./pages/material-purchase/TransferBatchManagement";
+import FirstLegCarrierManagement from "./pages/material-purchase/FirstLegCarrierManagement";
 import { idMaterialPurchaseOrders } from "./mock/idMaterialPurchaseOrders";
+import { initialFirstLegCarriers, initialFirstLegCarrierChannels } from "./mock/firstLegCarriers";
 import ProductPurchaseReconciliation from "./pages/finance/ProductPurchaseReconciliation";
 import ProcurementReconciliation, { type ReconciliationView } from "./pages/finance/ProcurementReconciliation";
 import LogisticsFeeReconciliation from "./pages/finance/LogisticsFeeReconciliation";
@@ -35,6 +37,7 @@ import RoleManagement from "./pages/settings/RoleManagement";
 import DictionaryConfig from "./pages/settings/DictionaryConfig";
 import type { ImportedLogisticsInfo } from "./types/materialLogistics";
 import type { TransferBatch } from "./types/transferBatch";
+import type { FirstLegCarrier, FirstLegCarrierChannel } from "./types/firstLegCarrier";
 
 const staticViews: Record<string, ReactElement> = {
   PMS首页: <Dashboard />,
@@ -56,7 +59,7 @@ const staticViews: Record<string, ReactElement> = {
 };
 
 const reconciliationViews = new Set<ReconciliationView>(["应付明细池", "面辅料采购对账", "物流费用对账", "对账单管理", "付款记录"]);
-const dynamicViewKeys = new Set(["商品采购建议", "KOL采购需求", "面辅料采购单", "面辅料采购跟踪", "头程物流", ...reconciliationViews]);
+const dynamicViewKeys = new Set(["商品采购建议", "KOL采购需求", "面辅料采购单", "面辅料采购跟踪", "头程物流", "头程物流商管理", ...reconciliationViews]);
 const isAvailableView = (key: string) => key in staticViews || dynamicViewKeys.has(key);
 
 export default function App() {
@@ -75,6 +78,8 @@ export default function App() {
   const [materialOrders, setMaterialOrders] = useState(idMaterialPurchaseOrders);
   const [importedLogistics, setImportedLogistics] = useState<ImportedLogisticsInfo[]>([]);
   const [transferBatches, setTransferBatches] = useState<TransferBatch[]>([]);
+  const [firstLegCarriers, setFirstLegCarriers] = useState<FirstLegCarrier[]>(initialFirstLegCarriers);
+  const [firstLegCarrierChannels, setFirstLegCarrierChannels] = useState<FirstLegCarrierChannel[]>(initialFirstLegCarrierChannels);
   const [targetFirstLegNo, setTargetFirstLegNo] = useState("");
   const [payables, setPayables] = useState(initialPayables);
   const [reconciliationOrders, setReconciliationOrders] = useState(initialOrders);
@@ -169,7 +174,10 @@ export default function App() {
       return <MaterialPurchaseTracking onCreateTransferBatch={createTransferBatchFromLogistics} records={materialLogisticsRecords} transferBatches={transferBatches} />;
     }
     if (active === "头程物流") {
-      return <TransferBatchManagement batches={transferBatches} setBatches={setTransferBatches} availableRecords={materialLogisticsRecords} targetBatchNo={targetFirstLegNo} onTargetHandled={() => setTargetFirstLegNo("")} />;
+      return <TransferBatchManagement batches={transferBatches} setBatches={setTransferBatches} availableRecords={materialLogisticsRecords} targetBatchNo={targetFirstLegNo} onTargetHandled={() => setTargetFirstLegNo("")} carriers={firstLegCarriers} channels={firstLegCarrierChannels} />;
+    }
+    if (active === "头程物流商管理") {
+      return <FirstLegCarrierManagement carriers={firstLegCarriers} setCarriers={setFirstLegCarriers} channels={firstLegCarrierChannels} setChannels={setFirstLegCarrierChannels} />;
     }
     if (active === "物流费用对账") {
       return <LogisticsFeeReconciliation onOpenFirstLeg={openFirstLegLogistics} />;
@@ -191,7 +199,7 @@ export default function App() {
       );
     }
     return staticViews[active] ?? <Dashboard />;
-  }, [active, importedLogistics, kolDemands, materialLogisticsRecords, materialOrders, paymentRecords, payables, reconciliationOrders, suggestions, targetFirstLegNo, transferBatches]);
+  }, [active, firstLegCarrierChannels, firstLegCarriers, importedLogistics, kolDemands, materialLogisticsRecords, materialOrders, paymentRecords, payables, reconciliationOrders, suggestions, targetFirstLegNo, transferBatches]);
 
   return (
     <Layout role={role} setRole={setRole} activeMenu={active} onMenuClick={openMenu} tabs={tabs} onTabSwitch={switchTab} onTabClose={closeTab}>

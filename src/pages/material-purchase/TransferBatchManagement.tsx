@@ -8,6 +8,7 @@ import StatusBadge from "../../components/common/StatusBadge";
 import Toast from "../../components/common/Toast";
 import { createMockTransferBatches } from "../../mock/transferBatches";
 import type { TransferBatch, TransferBatchStatus } from "../../types/transferBatch";
+import type { FirstLegCarrier, FirstLegCarrierChannel } from "../../types/firstLegCarrier";
 import CreateTransferBatchModal from "./CreateTransferBatchModal";
 import type { MaterialLogisticsRecord } from "./MaterialPurchaseTracking";
 
@@ -16,6 +17,14 @@ type Draft = {
   transferCenter: string;
   destinationWarehouse: string;
   carrier: string;
+  carrierId: string;
+  channelId: string;
+  transportMethod: string;
+  estimatedTransitDays: number;
+  billingMethod: string;
+  taxMethod: string;
+  feeCurrency: "RMB" | "USD" | "IDR";
+  destinationCountry: string;
   plannedShipDate: string;
   remark: string;
 };
@@ -37,6 +46,14 @@ const emptyDraft: Draft = {
   transferCenter: "广州转运中心",
   destinationWarehouse: "印尼雅加达面辅料仓",
   carrier: "空运专线",
+  carrierId: "",
+  channelId: "",
+  transportMethod: "",
+  estimatedTransitDays: 0,
+  billingMethod: "",
+  taxMethod: "",
+  feeCurrency: "RMB",
+  destinationCountry: "",
   plannedShipDate: "2026-06-12",
   remark: "",
 };
@@ -79,12 +96,16 @@ export default function TransferBatchManagement({
   availableRecords,
   targetBatchNo = "",
   onTargetHandled,
+  carriers,
+  channels,
 }: {
   batches: TransferBatch[];
   setBatches: Dispatch<SetStateAction<TransferBatch[]>>;
   availableRecords: MaterialLogisticsRecord[];
   targetBatchNo?: string;
   onTargetHandled?: () => void;
+  carriers: FirstLegCarrier[];
+  channels: FirstLegCarrierChannel[];
 }) {
   const [filters, setFilters] = useState<Filters>(emptyFilters);
   const [selectedBatches, setSelectedBatches] = useState<string[]>([]);
@@ -145,6 +166,14 @@ export default function TransferBatchManagement({
       transferCenter: batch.transferCenter,
       destinationWarehouse: batch.destinationWarehouse,
       carrier: batch.carrier,
+      carrierId: batch.carrierId ?? "",
+      channelId: batch.channelId ?? "",
+      transportMethod: batch.transportMethod ?? batch.shippingType ?? "",
+      estimatedTransitDays: batch.estimatedTransitDays ?? batch.transitDays ?? 0,
+      billingMethod: batch.billingMethod ?? "",
+      taxMethod: batch.taxMethod ?? "",
+      feeCurrency: batch.feeCurrency ?? "RMB",
+      destinationCountry: batch.destinationCountry ?? "",
       plannedShipDate: batch.plannedShipDate,
       remark: batch.remark,
     });
@@ -152,18 +181,55 @@ export default function TransferBatchManagement({
     setFormOpen(true);
   };
 
+  const enabledCarriers = carriers.filter((carrier) => carrier.status === "启用");
+  const availableChannels = channels.filter((channel) => channel.carrierId === draft.carrierId && channel.status === "启用");
+  const selectCarrier = (carrierId: string) => {
+    const carrier = carriers.find((item) => item.id === carrierId);
+    setDraft((current) => ({ ...current, carrierId, carrier: carrier?.carrierName ?? "", channelId: "", transportMethod: "", estimatedTransitDays: 0, billingMethod: "", taxMethod: "", feeCurrency: carrier?.settlementCurrency ?? "RMB", destinationCountry: "" }));
+  };
+  const selectChannel = (channelId: string) => {
+    const channel = channels.find((item) => item.id === channelId);
+    if (!channel) return updateDraft("channelId", "");
+    setDraft((current) => ({
+      ...current,
+      channelId,
+      carrier: channel.carrierName,
+      transportMethod: channel.transportMethod,
+      estimatedTransitDays: channel.estimatedTransitDays,
+      billingMethod: channel.billingMethod,
+      taxMethod: channel.taxMethod,
+      feeCurrency: channel.feeCurrency,
+      destinationCountry: channel.destinationCountry,
+      destinationWarehouse: channel.destinationWarehouse || current.destinationWarehouse,
+      transferCenter: channel.transferCenter || current.transferCenter,
+    }));
+  };
+
   const saveBatch = () => {
     const records = pendingRecords.filter((record) => selectedRecords.includes(record.idOrderNo));
+    const selectedCarrier = carriers.find((item) => item.id === draft.carrierId);
+    const selectedChannel = channels.find((item) => item.id === draft.channelId);
     if (!draft.batchName.trim()) return showToast("请填写头程物流名称");
+    if (!draft.carrierId) return showToast("请选择物流商");
+    if (!draft.channelId) return showToast("请选择物流渠道");
     if (!records.length) return showToast("请至少选择一条物流记录");
+    const linkedDraft = {
+      ...draft,
+      carrierCode: selectedCarrier?.carrierCode,
+      channelCode: selectedChannel?.channelCode,
+      channelName: selectedChannel?.channelName,
+      transitDays: draft.estimatedTransitDays,
+      shippingType: draft.transportMethod,
+      logisticsProvider: selectedCarrier?.carrierName,
+    };
     if (editingBatchNo) {
-      setBatches((current) => current.map((batch) => batch.batchNo === editingBatchNo ? { ...batch, ...draft, records } : batch));
+      setBatches((current) => current.map((batch) => batch.batchNo === editingBatchNo ? { ...batch, ...linkedDraft, records } : batch));
       showToast(`已保存头程物流：${editingBatchNo}`);
     } else {
       const batchNo = createBatchNo(batches);
       setBatches((current) => [{
         batchNo,
-        ...draft,
+        ...linkedDraft,
         creator: "王采购",
         createdAt: todayTime(),
         status: "待转运",
@@ -270,15 +336,23 @@ export default function TransferBatchManagement({
         { title: "创建头程物流字段", headers: ["字段", "说明"], rows: [["货运批次 / 货源地区 / 仓库 / 货运类型 / 区域", "创建头程物流必填字段"], ["货运公司", "头程物流公司"], ["物流费用 RMB / USD", "人民币和美元运费"], ["所得税 / 增值税 / 关税 / 罚款 / 清关费用", "印尼 IDR 费用，填写时必须为非负数字"], ["入库状态", "横向单选：待交货、已交货、已发货、已入库，默认待交货"], ["预计送达万隆时间 / 备注", "预计到达时间和补充说明"]] },
       ]} />
 
-      <CreateTransferBatchModal open={createOpen} onClose={() => setCreateOpen(false)} onSubmit={createLegacyBatch} />
+      <CreateTransferBatchModal open={createOpen} onClose={() => setCreateOpen(false)} onSubmit={createLegacyBatch} carriers={carriers} channels={channels} />
 
       <FormModal open={formOpen} title="编辑头程物流" widthClass="w-[940px]" onClose={() => setFormOpen(false)}>
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-3 text-xs md:grid-cols-3">
             <label className="grid gap-1 text-gray-600">头程物流名称<input className="h-8 rounded border px-2 text-sm" value={draft.batchName} onChange={(event) => updateDraft("batchName", event.target.value)} /></label>
+            <label className="grid gap-1 text-gray-600">物流商<select className="h-8 rounded border px-2 text-sm" value={draft.carrierId} onChange={(event) => selectCarrier(event.target.value)}><option value="">请选择启用物流商</option>{enabledCarriers.map((item) => <option key={item.id} value={item.id}>{item.carrierName}</option>)}</select></label>
+            <label className="grid gap-1 text-gray-600">物流渠道<select className="h-8 rounded border px-2 text-sm" value={draft.channelId} onChange={(event) => selectChannel(event.target.value)}><option value="">请选择启用渠道</option>{availableChannels.map((item) => <option key={item.id} value={item.id}>{item.channelName}</option>)}</select></label>
             <label className="grid gap-1 text-gray-600">转运中心<select className="h-8 rounded border px-2 text-sm" value={draft.transferCenter} onChange={(event) => updateDraft("transferCenter", event.target.value)}><option>广州转运中心</option><option>深圳转运中心</option><option>义乌转运中心</option></select></label>
             <label className="grid gap-1 text-gray-600">目的仓<select className="h-8 rounded border px-2 text-sm" value={draft.destinationWarehouse} onChange={(event) => updateDraft("destinationWarehouse", event.target.value)}><option>印尼雅加达面辅料仓</option><option>印尼泗水面辅料仓</option><option>菲律宾马尼拉仓</option></select></label>
             <label className="grid gap-1 text-gray-600">承运方式<select className="h-8 rounded border px-2 text-sm" value={draft.carrier} onChange={(event) => updateDraft("carrier", event.target.value)}><option>空运专线</option><option>海运拼柜</option><option>陆运快线</option></select></label>
+            <label className="grid gap-1 text-gray-600">运输方式<input className="h-8 rounded border bg-gray-50 px-2 text-sm" value={draft.transportMethod} onChange={(event) => updateDraft("transportMethod", event.target.value)} /></label>
+            <label className="grid gap-1 text-gray-600">预计运输天数<input className="h-8 rounded border px-2 text-sm" type="number" value={draft.estimatedTransitDays} onChange={(event) => updateDraft("estimatedTransitDays", Number(event.target.value))} /></label>
+            <label className="grid gap-1 text-gray-600">计费方式<input className="h-8 rounded border bg-gray-50 px-2 text-sm" value={draft.billingMethod} onChange={(event) => updateDraft("billingMethod", event.target.value)} /></label>
+            <label className="grid gap-1 text-gray-600">交税方式<input className="h-8 rounded border bg-gray-50 px-2 text-sm" value={draft.taxMethod} onChange={(event) => updateDraft("taxMethod", event.target.value)} /></label>
+            <label className="grid gap-1 text-gray-600">费用币种<select className="h-8 rounded border px-2 text-sm" value={draft.feeCurrency} onChange={(event) => updateDraft("feeCurrency", event.target.value as "RMB" | "USD" | "IDR")}><option>RMB</option><option>USD</option><option>IDR</option></select></label>
+            <label className="grid gap-1 text-gray-600">目的国家<input className="h-8 rounded border px-2 text-sm" value={draft.destinationCountry} onChange={(event) => updateDraft("destinationCountry", event.target.value)} /></label>
             <label className="grid gap-1 text-gray-600">计划转运日期<input className="h-8 rounded border px-2 text-sm" type="date" value={draft.plannedShipDate} onChange={(event) => updateDraft("plannedShipDate", event.target.value)} /></label>
             <label className="grid gap-1 text-gray-600">备注<input className="h-8 rounded border px-2 text-sm" value={draft.remark} onChange={(event) => updateDraft("remark", event.target.value)} /></label>
           </div>
