@@ -11,6 +11,8 @@ export type ProductPurchaseSuggestionSku = {
   pendingDeliveryQty: number;
   realTimeStockQty?: number;
   stockQty: number;
+  skuPurchaseOrderQty?: number;
+  skuHeadLogisticsQty?: number;
   purchasingQty: number;
   transitQty: number;
   rawGapQty?: number;
@@ -37,6 +39,8 @@ export type ProductPurchaseSuggestion = {
   rawGapQty?: number;
   suggestedQty: number;
   stockQty: number;
+  spuPurchaseOrderQty?: number;
+  spuHeadLogisticsQty?: number;
   purchasingQty: number;
   transitQty: number;
   defectiveQty: number;
@@ -348,6 +352,16 @@ export function calculateSuggestedQty(
   return Math.ceil(calculateRawGapQty(pendingDeliveryQty, kolApplicationQty, purchasingQty, realTimeStockQty) * 0.7);
 }
 
+export function getPurchasingQtyBreakdown(purchasingQty: number, transitQty: number) {
+  const totalPurchasingQty = Math.max(0, Math.trunc(purchasingQty || 0));
+  const headLogisticsQty = Math.min(totalPurchasingQty, Math.max(0, Math.trunc(transitQty || 0)));
+  return {
+    purchaseOrderQty: totalPurchasingQty - headLogisticsQty,
+    headLogisticsQty,
+    totalPurchasingQty,
+  };
+}
+
 function currentDateTime() {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")} ${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
@@ -362,7 +376,8 @@ export function createProductPurchaseSuggestions(): ProductPurchaseSuggestion[] 
     const skuItems = row.skuItems.map((item, itemIndex) => {
       const kolApplicationQty = [18, 12, 8, 5, 3][(rowIndex + itemIndex) % 5];
       const realTimeStockQty = item.stockQty;
-      const rawGapQty = calculateRawGapQty(item.pendingDeliveryQty, kolApplicationQty, item.purchasingQty, realTimeStockQty);
+      const purchasingBreakdown = getPurchasingQtyBreakdown(item.purchasingQty, item.transitQty);
+      const rawGapQty = calculateRawGapQty(item.pendingDeliveryQty, kolApplicationQty, purchasingBreakdown.totalPurchasingQty, realTimeStockQty);
       const codPaidQty = itemIndex === row.skuItems.length - 1
         ? row.codPaidQty - allocatedCodPaidQty
         : Math.round(row.codPaidQty * (item.pendingDeliveryQty / totalSkuPendingQty));
@@ -375,7 +390,7 @@ export function createProductPurchaseSuggestions(): ProductPurchaseSuggestion[] 
       const suggestedQty = calculateSuggestedQty(
         item.pendingDeliveryQty,
         kolApplicationQty,
-        item.purchasingQty,
+        purchasingBreakdown.totalPurchasingQty,
         realTimeStockQty,
       );
       return {
@@ -387,6 +402,9 @@ export function createProductPurchaseSuggestions(): ProductPurchaseSuggestion[] 
         paidQty,
         kolApplicationQty,
         realTimeStockQty,
+        skuPurchaseOrderQty: purchasingBreakdown.purchaseOrderQty,
+        skuHeadLogisticsQty: purchasingBreakdown.headLogisticsQty,
+        purchasingQty: purchasingBreakdown.totalPurchasingQty,
         rawGapQty,
         suggestedQty,
         status: suggestedQty === 0 ? "无需采购" as const : row.status === "已生成" ? "已生成" as const : "待生成" as const,
@@ -400,6 +418,8 @@ export function createProductPurchaseSuggestions(): ProductPurchaseSuggestion[] 
       skuItems,
       pendingDeliveryQty: skuItems.reduce((sum, item) => sum + item.pendingDeliveryQty, 0),
       stockQty: skuItems.reduce((sum, item) => sum + (item.realTimeStockQty ?? 0), 0),
+      spuPurchaseOrderQty: skuItems.reduce((sum, item) => sum + (item.skuPurchaseOrderQty ?? 0), 0),
+      spuHeadLogisticsQty: skuItems.reduce((sum, item) => sum + (item.skuHeadLogisticsQty ?? 0), 0),
       purchasingQty: skuItems.reduce((sum, item) => sum + item.purchasingQty, 0),
       transitQty: skuItems.reduce((sum, item) => sum + item.transitQty, 0),
       rawGapQty: skuItems.reduce((sum, item) => sum + (item.rawGapQty ?? 0), 0),
@@ -422,21 +442,31 @@ export function applyKolDemandQuantities(
   return suggestions.map((row) => {
     const skuItems = row.skuItems.map((item) => {
       const kolApplicationQty = quantities.get(item.sku) ?? 0;
+      const purchasingBreakdown = item.skuPurchaseOrderQty === undefined || item.skuHeadLogisticsQty === undefined
+        ? getPurchasingQtyBreakdown(item.purchasingQty, item.transitQty)
+        : {
+            purchaseOrderQty: item.skuPurchaseOrderQty,
+            headLogisticsQty: item.skuHeadLogisticsQty,
+            totalPurchasingQty: item.skuPurchaseOrderQty + item.skuHeadLogisticsQty,
+          };
       const rawGapQty = calculateRawGapQty(
         item.pendingDeliveryQty,
         kolApplicationQty,
-        item.purchasingQty,
+        purchasingBreakdown.totalPurchasingQty,
         item.realTimeStockQty ?? item.stockQty,
       );
       const suggestedQty = calculateSuggestedQty(
         item.pendingDeliveryQty,
         kolApplicationQty,
-        item.purchasingQty,
+        purchasingBreakdown.totalPurchasingQty,
         item.realTimeStockQty ?? item.stockQty,
       );
       return {
         ...item,
         kolApplicationQty,
+        skuPurchaseOrderQty: purchasingBreakdown.purchaseOrderQty,
+        skuHeadLogisticsQty: purchasingBreakdown.headLogisticsQty,
+        purchasingQty: purchasingBreakdown.totalPurchasingQty,
         rawGapQty,
         suggestedQty,
         status: suggestedQty === 0 ? "无需采购" as const : row.status === "已生成" ? "已生成" as const : "待生成" as const,
@@ -448,6 +478,9 @@ export function applyKolDemandQuantities(
       ...row,
       skuItems,
       totalPaidQty: skuItems.reduce((sum, item) => sum + (item.paidQty ?? 0), 0),
+      spuPurchaseOrderQty: skuItems.reduce((sum, item) => sum + (item.skuPurchaseOrderQty ?? 0), 0),
+      spuHeadLogisticsQty: skuItems.reduce((sum, item) => sum + (item.skuHeadLogisticsQty ?? 0), 0),
+      purchasingQty: skuItems.reduce((sum, item) => sum + item.purchasingQty, 0),
       rawGapQty,
       suggestedQty,
       updatedAt,

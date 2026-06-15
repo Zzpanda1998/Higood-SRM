@@ -1,8 +1,7 @@
-import { type Dispatch, type SetStateAction, useMemo, useState } from "react";
+import { type Dispatch, type ReactNode, type SetStateAction, useMemo, useState } from "react";
 import ConfirmModal from "../../components/common/ConfirmModal";
 import DataTable from "../../components/common/DataTable";
 import DetailModal from "../../components/common/DetailModal";
-import FormModal from "../../components/common/FormModal";
 import PageHeader from "../../components/common/PageHeader";
 import SearchBar from "../../components/common/SearchBar";
 import StatusBadge from "../../components/common/StatusBadge";
@@ -28,13 +27,26 @@ const levels: SupplierLevel[] = ["A级", "B级", "C级", "临时供应商"];
 const payments: PaymentMethod[] = ["预付", "月结", "到货后付款", "对账后付款"];
 const currencies: Currency[] = ["RMB", "USD", "IDR"];
 const deliveries: DeliveryMethod[] = ["供应商直发海外仓", "发至中国中转仓", "采购方自提", "货代上门提货"];
+const requiredFields = new Set<keyof FormValues>([
+  "supplierName",
+  "shortName",
+  "supplierType",
+  "country",
+  "city",
+  "supplierLevel",
+  "contactName",
+  "contactPhone",
+  "paymentMethod",
+  "currency",
+  "defaultDeliveryMethod",
+]);
 
 const emptyForm: FormValues = {
   supplierName: "",
   shortName: "",
   supplierType: "面料供应商",
   country: "中国",
-  city: "",
+  city: "广东广州",
   contactName: "",
   contactPhone: "",
   email: "",
@@ -128,10 +140,14 @@ export default function SupplierManagement() {
     setOpenForm(true);
   };
 
+  const closeForm = () => {
+    if (!window.confirm("当前内容未保存，确认关闭吗？")) return;
+    setOpenForm(false);
+  };
+
   const validate = (isEdit: boolean) => {
     const e: Errors = {};
-    const req: (keyof FormValues)[] = ["supplierName", "shortName", "supplierType", "country", "city", "contactName", "contactPhone", "paymentMethod", "currency", "defaultDeliveryMethod"];
-    req.forEach((k) => {
+    requiredFields.forEach((k) => {
       if (!String(form[k] ?? "").trim()) e[k] = `${selectFields.has(String(k)) ? "请选择" : "请输入"}${fieldLabel[k]}`;
     });
     if (String(form.contactPhone).trim().length < 6) e.contactPhone = "联系电话格式不正确";
@@ -344,7 +360,8 @@ export default function SupplierManagement() {
             ["供应商简称", "是", "不可为空，不可重复", "请输入供应商简称 / 供应商简称已存在"],
             ["供应商类型", "是", "必须选择", "请选择供应商类型"],
             ["国家 / 地区", "是", "必须选择", "请选择国家 / 地区"],
-            ["省市", "是", "不可为空", "请输入省市"],
+            ["省市", "是", "必须选择", "请选择省市"],
+            ["供应商等级", "是", "必须选择", "请选择供应商等级"],
             ["联系人", "是", "不可为空", "请输入联系人"],
             ["联系电话", "是", "至少 6 位", "联系电话格式不正确"],
             ["邮箱", "否", "填写时必须包含 @", "邮箱格式不正确"],
@@ -396,33 +413,63 @@ export default function SupplierManagement() {
         />
       </div>
 
-      <FormModal open={openForm} onClose={() => setOpenForm(false)} title={editing ? "编辑供应商" : "新增供应商"}>
-        {editing && <div className="mb-3 rounded bg-gray-50 px-3 py-2 text-sm">供应商编码：{editing.supplierCode}</div>}
-        <div className="grid grid-cols-2 gap-3 text-sm">
-          {renderInput("supplierName", "供应商名称", form, setForm, errors)}
-          {renderInput("shortName", "供应商简称", form, setForm, errors)}
-          {renderSelect("supplierType", "供应商类型", form, setForm, errors, supplierTypes)}
-          {renderSelect("country", "国家/地区", form, setForm, errors, countries)}
-          {renderSelect("city", "省市", form, setForm, errors, cities)}
-          {renderSelect("supplierLevel", "供应商等级", form, setForm, errors, levels)}
-          {renderInput("contactName", "联系人", form, setForm, errors)}
-          {renderInput("contactPhone", "联系电话", form, setForm, errors)}
-          {renderInput("email", "邮箱", form, setForm, errors)}
-          {renderInput("wechat", "微信", form, setForm, errors)}
-          {renderSelect("paymentMethod", "付款方式", form, setForm, errors, payments)}
-          {renderSelect("currency", "币种", form, setForm, errors, currencies)}
-          {renderSelect("defaultDeliveryMethod", "默认交货方式", form, setForm, errors, deliveries)}
-          {renderInput("invoiceInfo", "开票信息", form, setForm, errors)}
-          {renderInput("bankAccount", "银行账户", form, setForm, errors)}
-          <div className="col-span-2">{renderInput("remark", "备注", form, setForm, errors)}</div>
-        </div>
-        <div className="mt-4 flex justify-end gap-2">
-          <button className="rounded border border-gray-300 px-3 py-1.5 text-sm" onClick={() => setOpenForm(false)}>取消</button>
-          {!editing && <button className="rounded border border-gray-300 px-3 py-1.5 text-sm" onClick={() => saveCreate("草稿")}>保存草稿</button>}
-          {!editing && <button className="rounded bg-brand px-3 py-1.5 text-sm text-white" onClick={() => saveCreate("已启用")}>保存并启用</button>}
-          {editing && <button className="rounded bg-brand px-3 py-1.5 text-sm text-white" onClick={saveEdit}>保存</button>}
-        </div>
-      </FormModal>
+      <SupplierFormModal
+        open={openForm}
+        onClose={closeForm}
+        title={editing ? "编辑供应商" : "新增供应商"}
+        footer={(
+          <>
+            <button className="h-9 rounded-md border border-gray-300 bg-white px-4 text-sm text-gray-700 transition hover:bg-gray-50" onClick={closeForm}>取消</button>
+            {!editing && <button className="h-9 rounded-md border border-brand bg-blue-50 px-4 text-sm text-brand transition hover:bg-blue-100" onClick={() => saveCreate("草稿")}>保存草稿</button>}
+            {!editing && <button className="h-9 rounded-md bg-brand px-5 text-sm font-medium text-white shadow-sm transition hover:opacity-90" onClick={() => saveCreate("已启用")}>保存并启用</button>}
+            {editing && <button className="h-9 rounded-md bg-brand px-5 text-sm font-medium text-white shadow-sm transition hover:opacity-90" onClick={saveEdit}>保存</button>}
+          </>
+        )}
+      >
+        {editing && (
+          <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+            供应商编码：<span className="font-semibold">{editing.supplierCode}</span>
+          </div>
+        )}
+        <SupplierFormSection title="一、基础信息" description="维护供应商主体、类型及所属区域资料">
+          <div className="grid grid-cols-1 gap-x-5 gap-y-4 md:grid-cols-2">
+            {renderInput("supplierName", "供应商名称", form, setForm, errors, "请输入工商登记或常用供应商名称")}
+            {renderInput("shortName", "供应商简称", form, setForm, errors, "请输入便于业务识别的简称")}
+            {renderSelect("supplierType", "供应商类型", form, setForm, errors, supplierTypes)}
+            {renderSelect("country", "国家/地区", form, setForm, errors, countries)}
+            {renderSelect("city", "省市", form, setForm, errors, cities)}
+            {renderSelect("supplierLevel", "供应商等级", form, setForm, errors, levels)}
+          </div>
+        </SupplierFormSection>
+
+        <SupplierFormSection title="二、联系人信息" description="用于采购沟通、订单确认及日常协同">
+          <div className="grid grid-cols-1 gap-x-5 gap-y-4 md:grid-cols-2">
+            {renderInput("contactName", "联系人", form, setForm, errors, "请输入主要业务联系人")}
+            {renderInput("contactPhone", "联系电话", form, setForm, errors, "请输入手机号或固定电话")}
+            {renderInput("email", "邮箱", form, setForm, errors, "例如 name@company.com")}
+            {renderInput("wechat", "微信", form, setForm, errors, "请输入联系人微信号")}
+          </div>
+        </SupplierFormSection>
+
+        <SupplierFormSection title="三、商务结算信息" description="用于采购付款、开票与财务对账">
+          <div className="grid grid-cols-1 gap-x-5 gap-y-4 md:grid-cols-2">
+            {renderSelect("paymentMethod", "付款方式", form, setForm, errors, payments)}
+            {renderSelect("currency", "币种", form, setForm, errors, currencies)}
+            {renderInput("invoiceInfo", "开票信息", form, setForm, errors, "请输入抬头、税号等开票资料")}
+            {renderInput("bankAccount", "银行账户", form, setForm, errors, "请输入开户行及收款账号")}
+          </div>
+        </SupplierFormSection>
+
+        <SupplierFormSection title="四、交付信息" description="设置新建采购业务时默认带入的交货方式">
+          <div className="md:max-w-[calc(50%-10px)]">
+            {renderSelect("defaultDeliveryMethod", "默认交货方式", form, setForm, errors, deliveries)}
+          </div>
+        </SupplierFormSection>
+
+        <SupplierFormSection title="五、补充说明" description="记录合作偏好、特殊约定或其他业务备注">
+          {renderTextArea("remark", "备注", form, setForm, errors, "请输入供应商合作说明或其他备注信息")}
+        </SupplierFormSection>
+      </SupplierFormModal>
 
       <DetailModal open={!!detail} onClose={() => setDetail(null)} title="供应商详情">
         {detail && (
@@ -470,6 +517,7 @@ const fieldLabel: Record<string, string> = {
   supplierType: "供应商类型",
   country: "国家 / 地区",
   city: "省市",
+  supplierLevel: "供应商等级",
   contactName: "联系人",
   contactPhone: "联系电话",
   paymentMethod: "付款方式",
@@ -477,7 +525,18 @@ const fieldLabel: Record<string, string> = {
   defaultDeliveryMethod: "默认交货方式",
 };
 
-const selectFields = new Set(["supplierType", "country", "paymentMethod", "currency", "defaultDeliveryMethod"]);
+const selectFields = new Set(["supplierType", "country", "city", "supplierLevel", "paymentMethod", "currency", "defaultDeliveryMethod"]);
+
+const controlClass = "h-10 w-full rounded-md border bg-white px-3 text-sm text-gray-800 outline-none transition placeholder:text-gray-400 hover:border-gray-400 focus:border-brand focus:ring-2 focus:ring-blue-100";
+
+function FieldLabel({ field, label }: { field: keyof FormValues; label: string }) {
+  return (
+    <div className="mb-1.5 text-sm font-medium text-gray-700">
+      {requiredFields.has(field) && <span className="mr-1 text-red-500">*</span>}
+      {label}
+    </div>
+  );
+}
 
 function renderInput(
   key: keyof FormValues,
@@ -485,11 +544,17 @@ function renderInput(
   form: FormValues,
   setForm: Dispatch<SetStateAction<FormValues>>,
   errors: Errors,
+  placeholder = "",
 ) {
   return (
     <label className="block">
-      <div className="mb-1 text-xs text-gray-600">{label}</div>
-      <input className={`h-8 w-full rounded border px-2 text-sm ${errors[key] ? "border-red-500" : "border-gray-300"}`} value={String(form[key] ?? "")} onChange={(e) => setForm((s) => ({ ...s, [key]: e.target.value }))} />
+      <FieldLabel field={key} label={label} />
+      <input
+        className={`${controlClass} ${errors[key] ? "border-red-500 focus:border-red-500 focus:ring-red-100" : "border-gray-300"}`}
+        value={String(form[key] ?? "")}
+        placeholder={placeholder}
+        onChange={(e) => setForm((s) => ({ ...s, [key]: e.target.value }))}
+      />
       {errors[key] && <div className="mt-1 text-xs text-red-500">{errors[key]}</div>}
     </label>
   );
@@ -505,12 +570,80 @@ function renderSelect(
 ) {
   return (
     <label className="block">
-      <div className="mb-1 text-xs text-gray-600">{label}</div>
-      <select className={`h-8 w-full rounded border px-2 text-sm ${errors[key] ? "border-red-500" : "border-gray-300"}`} value={String(form[key] ?? "")} onChange={(e) => setForm((s) => ({ ...s, [key]: e.target.value }))}>
+      <FieldLabel field={key} label={label} />
+      <select className={`${controlClass} ${errors[key] ? "border-red-500 focus:border-red-500 focus:ring-red-100" : "border-gray-300"}`} value={String(form[key] ?? "")} onChange={(e) => setForm((s) => ({ ...s, [key]: e.target.value }))}>
         {options.map((x) => <option key={x}>{x}</option>)}
       </select>
       {errors[key] && <div className="mt-1 text-xs text-red-500">{errors[key]}</div>}
     </label>
+  );
+}
+
+function renderTextArea(
+  key: keyof FormValues,
+  label: string,
+  form: FormValues,
+  setForm: Dispatch<SetStateAction<FormValues>>,
+  errors: Errors,
+  placeholder = "",
+) {
+  return (
+    <label className="block">
+      <FieldLabel field={key} label={label} />
+      <textarea
+        className={`min-h-24 w-full resize-y rounded-md border bg-white px-3 py-2.5 text-sm text-gray-800 outline-none transition placeholder:text-gray-400 hover:border-gray-400 focus:border-brand focus:ring-2 focus:ring-blue-100 ${errors[key] ? "border-red-500 focus:border-red-500 focus:ring-red-100" : "border-gray-300"}`}
+        value={String(form[key] ?? "")}
+        placeholder={placeholder}
+        onChange={(e) => setForm((s) => ({ ...s, [key]: e.target.value }))}
+      />
+      {errors[key] && <div className="mt-1 text-xs text-red-500">{errors[key]}</div>}
+    </label>
+  );
+}
+
+function SupplierFormModal({
+  open,
+  onClose,
+  title,
+  children,
+  footer,
+}: {
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  children: ReactNode;
+  footer: ReactNode;
+}) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/45 p-4" onMouseDown={onClose}>
+      <div className="flex max-h-[80vh] w-[min(1080px,calc(100vw-32px))] flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
+        <div className="flex shrink-0 items-center justify-between border-b border-gray-200 bg-white px-6 py-4">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
+            <p className="mt-1 text-xs text-gray-500">请按资料分类完整填写供应商信息，带 * 的字段为必填项</p>
+          </div>
+          <button className="rounded-md px-3 py-2 text-sm text-gray-500 transition hover:bg-gray-100 hover:text-gray-800" onClick={onClose}>关闭</button>
+        </div>
+        <div className="flex-1 space-y-4 overflow-y-auto bg-slate-50 p-5 md:p-6">{children}</div>
+        <div className="flex shrink-0 justify-end gap-3 border-t border-gray-200 bg-white px-6 py-4 shadow-[0_-4px_12px_rgba(15,23,42,0.04)]">{footer}</div>
+      </div>
+    </div>
+  );
+}
+
+function SupplierFormSection({ title, description, children }: { title: string; description: string; children: ReactNode }) {
+  return (
+    <section className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+      <div className="mb-5 flex items-start gap-3 border-b border-gray-100 pb-3">
+        <span className="mt-0.5 h-5 w-1 shrink-0 rounded-full bg-brand" />
+        <div>
+          <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
+          <p className="mt-1 text-xs text-gray-500">{description}</p>
+        </div>
+      </div>
+      {children}
+    </section>
   );
 }
 

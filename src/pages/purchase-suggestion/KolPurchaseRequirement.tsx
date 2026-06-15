@@ -70,16 +70,16 @@ function ProductImage({ src, name, large = false }: { src?: string; name: string
   );
 }
 
-function Drawer({ open, title, onClose, children, width = "max-w-[920px]" }: { open: boolean; title: string; onClose: () => void; children: ReactNode; width?: string }) {
+function KolContentModal({ open, title, onClose, children, width = "max-w-[920px]" }: { open: boolean; title: string; onClose: () => void; children: ReactNode; width?: string }) {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-[70] flex justify-end bg-black/25">
-      <div className={`flex h-full w-full ${width} flex-col bg-white shadow-xl`}>
-        <div className="flex h-14 shrink-0 items-center justify-between border-b px-5">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-[1px]">
+      <div className={`flex max-h-[85vh] w-full ${width} flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-2xl`}>
+        <div className="flex h-14 shrink-0 items-center justify-between border-b border-gray-200 px-5">
           <h2 className="font-semibold text-gray-900">{title}</h2>
-          <button className="text-xl text-gray-400 hover:text-gray-700" onClick={onClose}>×</button>
+          <button className="rounded-md px-3 py-1.5 text-sm text-gray-500 transition hover:bg-gray-100 hover:text-gray-800" onClick={onClose}>关闭</button>
         </div>
-        <div className="min-h-0 flex-1 overflow-auto p-5">{children}</div>
+        <div className="min-h-0 flex-1 overflow-auto bg-slate-50 p-5">{children}</div>
       </div>
     </div>
   );
@@ -139,6 +139,10 @@ export default function KolPurchaseRequirement({ suggestions, demands, onDemands
   const [appliedFilters, setAppliedFilters] = useState<Filters>(initialFilters);
   const [selected, setSelected] = useState<string[]>([]);
   const [toast, setToast] = useState("");
+  const closeForm = () => {
+    if (!window.confirm("当前内容未保存，确认关闭吗？")) return;
+    setFormOpen(false);
+  };
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<KolPurchaseDemand | null>(null);
   const [form, setForm] = useState<DemandForm>(emptyForm(suggestions[0]?.spu));
@@ -475,10 +479,10 @@ export default function KolPurchaseRequirement({ suggestions, demands, onDemands
         { title: "数量规则", headers: ["字段", "规则"], rows: [["入库差", "KOL申请数量 - KOL入库数量"], ["入库次数", "每次确认入库后 +1"], ["实际可得次数", "每次确认实际入库后 +1"], ["超量入库", "单条操作二次确认，批量操作不允许超量"]] },
       ]} />
 
-      <Drawer open={formOpen} title={editing ? "编辑KOL采购需求" : "新增KOL采购需求"} onClose={() => setFormOpen(false)}>
+      <KolContentModal open={formOpen} title={editing ? "编辑KOL采购需求" : "新增KOL采购需求"} onClose={closeForm}>
         <div className="space-y-5">
-          <section>
-            <SectionTitle>基础信息</SectionTitle>
+          <section className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+            <SectionTitle>一、基础信息</SectionTitle>
             <div className="grid grid-cols-2 gap-3">
               <Field label="申请人 *"><input className={inputClass} value={form.applicant} onChange={(event) => setForm((current) => ({ ...current, applicant: event.target.value }))} /></Field>
               <Field label="店铺 *"><select className={inputClass} value={form.storeName} onChange={(event) => setForm((current) => ({ ...current, storeName: event.target.value }))}>{stores.map((item) => <option key={item}>{item}</option>)}</select></Field>
@@ -486,8 +490,8 @@ export default function KolPurchaseRequirement({ suggestions, demands, onDemands
               <Field label="申请时间 *"><input className={inputClass} value={form.appliedAt} onChange={(event) => setForm((current) => ({ ...current, appliedAt: event.target.value }))} /></Field>
             </div>
           </section>
-          <section>
-            <SectionTitle>商品选择</SectionTitle>
+          <section className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+            <SectionTitle>二、商品选择</SectionTitle>
             <div className="relative">
               <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
               <input className={`${inputClass} pl-9`} value={spuOpen ? spuQuery : currentSpu ? `${currentSpu.spu} · ${currentSpu.productName}` : ""} onFocus={() => { setSpuOpen(true); setSpuQuery(""); }} onChange={(event) => { setSpuOpen(true); setSpuQuery(event.target.value); }} placeholder="搜索 SPU / 款号 / 商品名称" />
@@ -496,8 +500,8 @@ export default function KolPurchaseRequirement({ suggestions, demands, onDemands
               </div>}
             </div>
           </section>
-          {currentSpu && <section>
-            <SectionTitle>SKU明细</SectionTitle>
+          {currentSpu && <section className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+            <SectionTitle>三、SKU明细</SectionTitle>
             <div className="overflow-x-auto rounded border">
               <table className="min-w-[850px] w-full text-left text-xs">
                 <thead className="bg-gray-50"><tr>{["", "图片", "SKU", "商品名称", "颜色", "尺码", "历史KOL申请数量", "本次KOL申请数量", "备注"].map((item) => <th key={item} className="border-b px-2 py-2 font-medium">{item}</th>)}</tr></thead>
@@ -513,22 +517,22 @@ export default function KolPurchaseRequirement({ suggestions, demands, onDemands
             </div>
             <div className="mt-2 rounded bg-blue-50 px-3 py-2 text-sm text-gray-700">已选 <strong>{form.selectedSkus.length}</strong> 个 SKU，本次KOL申请总数 <strong className="text-brand">{selectedQty}</strong></div>
           </section>}
-          <section><SectionTitle>备注</SectionTitle><textarea className="min-h-24 w-full rounded border border-gray-300 p-2 text-sm outline-none focus:border-brand" value={form.note} onChange={(event) => setForm((current) => ({ ...current, note: event.target.value }))} placeholder="填写申请说明" /></section>
-          <div className="sticky bottom-0 flex justify-end gap-2 border-t bg-white py-3"><button className="h-9 rounded border px-4 text-sm" onClick={() => setFormOpen(false)}>取消</button><button className="h-9 rounded border border-brand px-4 text-sm text-brand" onClick={() => saveForm("草稿")}>保存草稿</button><button className="h-9 rounded bg-brand px-4 text-sm text-white" onClick={() => saveForm("待入库")}>提交申请</button></div>
+          <section className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm"><SectionTitle>四、备注说明</SectionTitle><textarea className="min-h-24 w-full rounded border border-gray-300 p-2 text-sm outline-none focus:border-brand" value={form.note} onChange={(event) => setForm((current) => ({ ...current, note: event.target.value }))} placeholder="填写申请说明" /></section>
+          <div className="sticky bottom-0 flex justify-end gap-2 border-t bg-white py-3"><button className="h-9 rounded border px-4 text-sm" onClick={closeForm}>取消</button><button className="h-9 rounded border border-brand px-4 text-sm text-brand" onClick={() => saveForm("草稿")}>保存草稿</button><button className="h-9 rounded bg-brand px-4 text-sm text-white" onClick={() => saveForm("待入库")}>提交申请</button></div>
         </div>
-      </Drawer>
+      </KolContentModal>
 
-      <Drawer open={!!detail} title="KOL采购需求详情" onClose={() => setDetail(null)} width="max-w-[860px]">
+      <KolContentModal open={!!detail} title="KOL采购需求详情" onClose={() => setDetail(null)} width="max-w-[860px]">
         {detail && <div className="space-y-5 text-sm">
-          <section><SectionTitle>申请信息</SectionTitle><div className="grid grid-cols-3 gap-3 rounded bg-gray-50 p-3">{[["申请单号", detail.demandNo], ["申请人", detail.applicant], ["申请时间", detail.appliedAt], ["店铺", detail.storeName ?? "-"], ["是否可售爆款", detail.isHotSale ? "是" : "否"], ["状态", detail.status]].map(([label, value]) => <div key={label}><div className="text-xs text-gray-500">{label}</div><div className="mt-1">{value}</div></div>)}</div></section>
-          <section><SectionTitle>商品信息</SectionTitle><div className="flex gap-4"><ProductImage src={detail.imageUrl} name={detail.productName} large /><div className="grid flex-1 grid-cols-2 gap-3">{[["SPU", detail.spu], ["SKU", detail.sku], ["商品名称", detail.productName], ["颜色 / 尺码", `${detail.color} / ${detail.size}`], ["款式", `${detail.styleId} ${detail.styleName}`], ["品类 / 评分", `${detail.category} / ${detail.score}`]].map(([label, value]) => <div key={label}><span className="text-gray-500">{label}：</span>{value}</div>)}</div></div></section>
-          <section><SectionTitle>数量信息</SectionTitle><div className="grid grid-cols-3 gap-2">{[["KOL申请数量", detail.kolApplyQty], ["KOL入库数量", detail.kolInboundQty], ["入库差", detail.inboundDiffQty], ["实际可得次数", detail.actualAvailableCount], ["KOL入库次数", detail.kolInboundCount], ["最后一次实际可得", detail.lastAvailableAt ?? "-"]].map(([label, value]) => <div key={label} className="rounded border px-3 py-2"><div className="text-xs text-gray-500">{label}</div><div className="mt-1 font-medium">{value}</div></div>)}</div></section>
-          <section><SectionTitle>入库记录</SectionTitle><div className="rounded border">{detail.inboundRecords.length ? detail.inboundRecords.map((item) => <div key={item.id} className="grid grid-cols-4 border-b px-3 py-2 text-xs"><span>{item.inboundAt}</span><span>{item.inboundBy}</span><span>{item.quantity} 件</span><span>{item.remark || "-"}</span></div>) : <div className="p-4 text-center text-gray-400">暂无入库记录</div>}</div></section>
-          {detail.status === "已驳回" && <section><SectionTitle>驳回信息</SectionTitle><div className="rounded border border-red-100 bg-red-50 p-3"><div>{detail.rejectedBy} · {detail.rejectedAt}</div><div className="mt-1 text-red-700">{detail.rejectReason}</div></div></section>}
-          <section><SectionTitle>备注记录</SectionTitle><div className="space-y-2">{detail.remarks.length ? detail.remarks.map((item) => <div key={item.id} className="rounded border p-3"><div className="text-xs text-gray-500">{item.createdBy} · {item.createdAt}</div><div className="mt-1">{item.content}</div></div>) : <div className="text-gray-400">暂无备注</div>}</div></section>
-          <section><SectionTitle>操作日志</SectionTitle><div className="space-y-2">{detail.logs.map((item) => <div key={item.id} className="flex gap-3 border-b pb-2 text-xs"><span className="w-36 text-gray-500">{item.operatedAt}</span><span className="w-20 font-medium">{item.action}</span><span>{item.operator} · {item.detail}</span></div>)}</div></section>
+          <section className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm"><SectionTitle>一、申请信息</SectionTitle><div className="grid grid-cols-3 gap-3 rounded bg-gray-50 p-3">{[["申请单号", detail.demandNo], ["申请人", detail.applicant], ["申请时间", detail.appliedAt], ["店铺", detail.storeName ?? "-"], ["是否可售爆款", detail.isHotSale ? "是" : "否"], ["状态", detail.status]].map(([label, value]) => <div key={label}><div className="text-xs text-gray-500">{label}</div><div className="mt-1">{value}</div></div>)}</div></section>
+          <section className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm"><SectionTitle>二、商品信息</SectionTitle><div className="flex gap-4"><ProductImage src={detail.imageUrl} name={detail.productName} large /><div className="grid flex-1 grid-cols-2 gap-3">{[["SPU", detail.spu], ["SKU", detail.sku], ["商品名称", detail.productName], ["颜色 / 尺码", `${detail.color} / ${detail.size}`], ["款式", `${detail.styleId} ${detail.styleName}`], ["品类 / 评分", `${detail.category} / ${detail.score}`]].map(([label, value]) => <div key={label}><span className="text-gray-500">{label}：</span>{value}</div>)}</div></div></section>
+          <section className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm"><SectionTitle>三、数量信息</SectionTitle><div className="grid grid-cols-3 gap-2">{[["KOL申请数量", detail.kolApplyQty], ["KOL入库数量", detail.kolInboundQty], ["入库差", detail.inboundDiffQty], ["实际可得次数", detail.actualAvailableCount], ["KOL入库次数", detail.kolInboundCount], ["最后一次实际可得", detail.lastAvailableAt ?? "-"]].map(([label, value]) => <div key={label} className="rounded border px-3 py-2"><div className="text-xs text-gray-500">{label}</div><div className="mt-1 font-medium">{value}</div></div>)}</div></section>
+          <section className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm"><SectionTitle>四、入库记录</SectionTitle><div className="rounded border">{detail.inboundRecords.length ? detail.inboundRecords.map((item) => <div key={item.id} className="grid grid-cols-4 border-b px-3 py-2 text-xs"><span>{item.inboundAt}</span><span>{item.inboundBy}</span><span>{item.quantity} 件</span><span>{item.remark || "-"}</span></div>) : <div className="p-4 text-center text-gray-400">暂无入库记录</div>}</div></section>
+          {detail.status === "已驳回" && <section className="rounded-lg border border-red-100 bg-white p-5 shadow-sm"><SectionTitle>五、驳回信息</SectionTitle><div className="rounded border border-red-100 bg-red-50 p-3"><div>{detail.rejectedBy} · {detail.rejectedAt}</div><div className="mt-1 text-red-700">{detail.rejectReason}</div></div></section>}
+          <section className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm"><SectionTitle>六、备注记录</SectionTitle><div className="space-y-2">{detail.remarks.length ? detail.remarks.map((item) => <div key={item.id} className="rounded border p-3"><div className="text-xs text-gray-500">{item.createdBy} · {item.createdAt}</div><div className="mt-1">{item.content}</div></div>) : <div className="text-gray-400">暂无备注</div>}</div></section>
+          <section className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm"><SectionTitle>七、操作日志</SectionTitle><div className="space-y-2">{detail.logs.map((item) => <div key={item.id} className="flex gap-3 border-b pb-2 text-xs"><span className="w-36 text-gray-500">{item.operatedAt}</span><span className="w-20 font-medium">{item.action}</span><span>{item.operator} · {item.detail}</span></div>)}</div></section>
         </div>}
-      </Drawer>
+      </KolContentModal>
 
       <Modal open={inboundTargets.length > 0} title="确认KOL需求入库" onClose={() => setInboundTargets([])}>
         {inboundTargets.length > 0 && <div className="space-y-4 text-sm">

@@ -77,10 +77,14 @@ export default function TransferBatchManagement({
   batches,
   setBatches,
   availableRecords,
+  targetBatchNo = "",
+  onTargetHandled,
 }: {
   batches: TransferBatch[];
   setBatches: Dispatch<SetStateAction<TransferBatch[]>>;
   availableRecords: MaterialLogisticsRecord[];
+  targetBatchNo?: string;
+  onTargetHandled?: () => void;
 }) {
   const [filters, setFilters] = useState<Filters>(emptyFilters);
   const [selectedBatches, setSelectedBatches] = useState<string[]>([]);
@@ -95,6 +99,19 @@ export default function TransferBatchManagement({
   useEffect(() => {
     if (!batches.length && availableRecords.length) setBatches(createMockTransferBatches(availableRecords));
   }, [availableRecords, batches.length, setBatches]);
+
+  useEffect(() => {
+    if (!targetBatchNo) return;
+    const matched = batches.some((batch) => batch.batchNo === targetBatchNo);
+    if (matched) {
+      setFilters((current) => ({ ...current, keyword: targetBatchNo }));
+      showToast(`已定位头程物流单：${targetBatchNo}`);
+      onTargetHandled?.();
+    } else if (batches.length) {
+      showToast("未找到对应头程物流单");
+      onTargetHandled?.();
+    }
+  }, [batches, targetBatchNo, onTargetHandled]);
 
   const batchRecordIds = useMemo(() => new Set(batches.flatMap((batch) => batch.records.map((record) => record.idOrderNo))), [batches]);
   const pendingRecords = useMemo(() => availableRecords.filter((record) => !batchRecordIds.has(record.idOrderNo) || batches.find((batch) => batch.batchNo === editingBatchNo)?.records.some((item) => item.idOrderNo === record.idOrderNo)), [availableRecords, batchRecordIds, batches, editingBatchNo]);
@@ -228,7 +245,7 @@ export default function TransferBatchManagement({
           <thead className="bg-gray-50"><tr>{["勾选框", "头程物流信息", "物流信息", "采购单信息", "头程物流数据", "时间", "状态", "备注", "添加人", "操作"].map((title) => <th key={title} className="border-b px-2 py-2 font-medium">{title}</th>)}</tr></thead>
           <tbody>
             {rows.map((batch) => (
-              <tr key={batch.batchNo} className="border-b border-gray-200 align-top hover:bg-gray-50">
+              <tr key={batch.batchNo} className={`border-b border-gray-200 align-top hover:bg-gray-50 ${filters.keyword === batch.batchNo ? "bg-blue-50 ring-1 ring-inset ring-blue-300" : ""}`}>
                 <td className="px-2 py-2 text-center"><input type="checkbox" checked={selectedBatches.includes(batch.batchNo)} onChange={() => toggleBatch(batch.batchNo)} /></td>
                 <td className="px-2 py-2 leading-5"><button className="font-medium text-brand" onClick={() => setDetail(batch)}>{batch.batchNo}</button><div>{batch.batchName}</div><div>货运类型：{batch.shippingType || batch.carrier}</div><div>仓库：{batch.warehouse || batch.destinationWarehouse}</div><div>地区：{batch.regionRoute || batch.sourceRegion || "-"}</div></td>
                 <td className="px-2 py-2 leading-5">{batch.records.length ? batch.records.map((record, index) => <div key={record.idOrderNo} className={index ? "mt-1 border-t border-dashed pt-1" : ""}><span>{record.company}</span>：<span className="text-brand">{record.logisticsNo}</span><br />箱数：{record.boxCount}，重量：{qty(record.logisticsWeight)} KG<br />物流费：{money(record.freightAmount)}</div>) : <div>物流公司：{batch.logisticsProvider || "-"}<br />头程单号：-<br />箱数：{batch.boxCount ?? 0}</div>}</td>

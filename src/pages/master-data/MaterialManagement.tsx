@@ -1,64 +1,56 @@
-import { type Dispatch, type SetStateAction, useMemo, useState } from "react";
+import { useMemo, useState, type ChangeEvent, type ReactNode } from "react";
 import ConfirmModal from "../../components/common/ConfirmModal";
 import DataTable from "../../components/common/DataTable";
+import DesignLogicCard from "../../components/common/DesignLogicCard";
 import DetailModal from "../../components/common/DetailModal";
-import FormModal from "../../components/common/FormModal";
 import PageHeader from "../../components/common/PageHeader";
 import SearchBar from "../../components/common/SearchBar";
 import StatusBadge from "../../components/common/StatusBadge";
 import Toast from "../../components/common/Toast";
 import { materials as initialMaterials } from "../../mock/materials";
 import { suppliers } from "../../mock/suppliers";
-import type { Currency, Material, MaterialCategory, MaterialPurpose, MaterialStatus, Unit } from "../../types/material";
+import type {
+  BrandType,
+  Currency,
+  Material,
+  MaterialCategory,
+  MaterialCustomsInfo,
+  MaterialDeclarationInfo,
+  MaterialStatus,
+  PurchaseRegion,
+  TaxExemptionType,
+  Unit,
+} from "../../types/material";
 
-type FormValues = Omit<Material, "id" | "materialCode" | "status" | "createdBy" | "createdAt" | "updatedAt" | "needInspection"> & {
-  needInspection?: boolean;
-};
-type Errors = Partial<Record<keyof FormValues, string>>;
+type EditErrors = Record<string, string>;
 
 const categories: MaterialCategory[] = ["面料", "辅料", "纱线", "包材", "耗材", "样衣", "成衣"];
-const purposes: MaterialPurpose[] = ["生产用", "包装用", "样衣开发", "成衣采购", "日常耗材"];
-const units: Unit[] = ["米", "码", "公斤", "个", "件", "卷", "箱", "包", "打"];
+const units: Unit[] = ["米", "码", "公斤", "KG", "个", "件", "卷", "箱", "包", "打"];
 const currencies: Currency[] = ["RMB", "USD", "IDR"];
-const categoryPrefix: Record<MaterialCategory, string> = { 面料: "FAB", 辅料: "ACC", 纱线: "YAR", 包材: "PKG", 耗材: "CON", 样衣: "SAM", 成衣: "GAR" };
-const supplierOptions = suppliers.map((s) => s.supplierName);
-
-const emptyForm: FormValues = {
-  materialName: "",
-  materialCategory: "面料",
-  specification: "",
-  materialPurpose: undefined,
-  styleNo: "",
-  composition: "",
-  weight: "",
-  width: "",
-  color: "",
-  colorCode: "",
-  size: "",
-  baseUnit: "米",
-  purchaseUnit: "米",
-  inventoryUnit: "米",
-  conversionRate: "",
-  defaultSupplier: "",
-  referencePurchasePrice: undefined,
-  currency: "RMB",
-  minPurchaseQty: undefined,
-  purchaseLeadTime: undefined,
-  needInspection: undefined,
-  inspectionRequirement: "",
-  batchManagement: false,
-  colorSizeManagement: false,
-  totalPurchaseOrders: 0,
-  totalPurchaseQty: 0,
-  totalPurchaseAmount: 0,
-  recentPurchaseOrderNo: "",
-  recentPurchaseDate: "",
-  remark: "",
-};
+const purchaseRegions: PurchaseRegion[] = ["国内", "印尼", "其他"];
+const brandTypes: BrandType[] = ["无品牌", "自有品牌", "授权品牌"];
+const exemptionTypes: TaxExemptionType[] = ["照章征税", "全免", "其他"];
+const supplierOptions = suppliers.map((supplier) => supplier.supplierName);
+const specialAttributes = [
+  "普货", "带电带磁", "带电", "带磁", "弱磁", "纯电池", "低功率电池", "高功率电池", "木制品", "纺织品",
+  "皮具", "粉末", "食品", "纯液体", "带液体", "少量液体", "带游离液体", "危险品", "膏体", "管制刀具",
+  "防疫用品", "仿牌", "敏感货", "车载产品", "充电设备", "金属",
+];
 
 const now = () => new Date().toLocaleString("zh-CN", { hour12: false });
+const emptyDeclaration = (): MaterialDeclarationInfo => ({ brandType: "无品牌", specialAttributes: ["普货"] });
+const emptyCustoms = (): MaterialCustomsInfo => ({ needCustomsDeclaration: true, taxExemptionType: "照章征税" });
+const inputClass = "h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 hover:border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-100";
 
-export default function MaterialManagement() {
+export default function MaterialManagement({
+  title = "物料管理",
+  description = "查看商品中心 PCS 同步到 PMS 的物料资料，并维护采购、申报和报关补充信息。",
+  allowedCategories = categories,
+}: {
+  title?: string;
+  description?: string;
+  allowedCategories?: MaterialCategory[];
+}) {
   const [rows, setRows] = useState<Material[]>(initialMaterials);
   const [kwInput, setKwInput] = useState("");
   const [kw, setKw] = useState("");
@@ -66,35 +58,103 @@ export default function MaterialManagement() {
   const [statusFilter, setStatusFilter] = useState("");
   const [qcFilter, setQcFilter] = useState("");
   const [supplierFilter, setSupplierFilter] = useState("");
-  const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Material | null>(null);
-  const [form, setForm] = useState<FormValues>(emptyForm);
-  const [errors, setErrors] = useState<Errors>({});
+  const [draft, setDraft] = useState<Material | null>(null);
+  const [errors, setErrors] = useState<EditErrors>({});
   const [detail, setDetail] = useState<Material | null>(null);
   const [confirmRow, setConfirmRow] = useState<Material | null>(null);
   const [confirmAction, setConfirmAction] = useState<"enable" | "disable" | null>(null);
   const [toast, setToast] = useState("");
 
-  const filtered = useMemo(
-    () =>
-      rows.filter((x) => {
-        const hitKw =
-          !kw.trim() ||
-          [x.materialCode, x.materialName, x.specification, x.color ?? "", x.colorCode ?? ""].some((v) =>
-            v.toLowerCase().includes(kw.trim().toLowerCase()),
-          );
-        const hitCat = !categoryFilter || x.materialCategory === categoryFilter;
-        const hitStatus = !statusFilter || x.status === statusFilter;
-        const hitQc = !qcFilter || String(x.needInspection) === qcFilter;
-        const hitSup = !supplierFilter || x.defaultSupplier === supplierFilter;
-        return hitKw && hitCat && hitStatus && hitQc && hitSup;
-      }),
-    [rows, kw, categoryFilter, statusFilter, qcFilter, supplierFilter],
-  );
+  const filtered = useMemo(() => rows.filter((row) => {
+    const hitKeyword = !kw.trim() || [row.materialCode, row.materialName, row.specification, row.color ?? "", row.colorCode ?? ""]
+      .some((value) => value.toLowerCase().includes(kw.trim().toLowerCase()));
+    return allowedCategories.includes(row.materialCategory)
+      && hitKeyword
+      && (!categoryFilter || row.materialCategory === categoryFilter)
+      && (!statusFilter || row.status === statusFilter)
+      && (!qcFilter || String(row.needInspection) === qcFilter)
+      && (!supplierFilter || row.defaultSupplier === supplierFilter);
+  }), [allowedCategories, categoryFilter, kw, qcFilter, rows, statusFilter, supplierFilter]);
 
-  const showToast = (m: string) => {
-    setToast(m);
+  const showToast = (message: string) => {
+    setToast(message);
     window.setTimeout(() => setToast(""), 2200);
+  };
+
+  const openEdit = (row: Material) => {
+    setEditing(row);
+    setDraft(structuredClone({
+      ...row,
+      declarationInfo: row.declarationInfo ?? emptyDeclaration(),
+      customsInfo: row.customsInfo ?? emptyCustoms(),
+    }));
+    setErrors({});
+  };
+
+  const updateDraft = <K extends keyof Material>(key: K, value: Material[K]) => {
+    setDraft((current) => current ? { ...current, [key]: value } : current);
+    setErrors((current) => ({ ...current, [key]: "" }));
+  };
+
+  const updateDeclaration = <K extends keyof MaterialDeclarationInfo>(key: K, value: MaterialDeclarationInfo[K]) => {
+    setDraft((current) => current ? { ...current, declarationInfo: { ...(current.declarationInfo ?? emptyDeclaration()), [key]: value } } : current);
+  };
+
+  const updateCustoms = <K extends keyof MaterialCustomsInfo>(key: K, value: MaterialCustomsInfo[K]) => {
+    setDraft((current) => current ? { ...current, customsInfo: { ...(current.customsInfo ?? emptyCustoms()), [key]: value } } : current);
+    setErrors((current) => ({ ...current, [key]: "" }));
+  };
+
+  const handleImage = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!["image/png", "image/jpeg"].includes(file.type)) {
+      setErrors((current) => ({ ...current, declarationImageUrl: "仅支持 png / jpg / jpeg" }));
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setErrors((current) => ({ ...current, declarationImageUrl: "图片大小不能超过 5MB" }));
+      return;
+    }
+    updateDeclaration("declarationImageUrl", file.name);
+    setErrors((current) => ({ ...current, declarationImageUrl: "" }));
+  };
+
+  const validate = () => {
+    if (!draft) return false;
+    const next: EditErrors = {};
+    if (!draft.materialCode) next.materialCode = "物料编码不能为空";
+    if (!draft.materialCategory) next.materialCategory = "请选择物料分类";
+    if (!draft.baseUnit) next.baseUnit = "请选择基础单位";
+    if (!draft.purchaseUnit) next.purchaseUnit = "请选择采购单位";
+    if (!draft.inventoryUnit) next.inventoryUnit = "请选择库存单位";
+    if ((draft.referencePurchasePrice ?? 0) < 0) next.referencePurchasePrice = "默认采购价不能小于 0";
+    if ((draft.customsInfo?.legalSecondUnitValue ?? 0) < 0) next.legalSecondUnitValue = "法定第二计量单位数值不能小于 0";
+    if (draft.customsInfo?.needCustomsDeclaration) {
+      if (!draft.customsInfo.chineseCustomsName?.trim()) next.chineseCustomsName = "请输入中文报关名";
+      if (!draft.customsInfo.englishCustomsName?.trim()) next.englishCustomsName = "请输入英文报关名";
+      if (!draft.customsInfo.transactionUnit) next.transactionUnit = "请选择成交单位";
+    }
+    setErrors(next);
+    return Object.keys(next).length === 0;
+  };
+
+  const saveEdit = () => {
+    if (!editing || !draft || !validate()) return;
+    const saved: Material = {
+      ...draft,
+      materialCode: editing.materialCode,
+      systemInfo: editing.systemInfo,
+      createdBy: editing.createdBy,
+      createdAt: editing.createdAt,
+      updatedBy: "当前用户",
+      updatedAt: now(),
+    };
+    setRows((current) => current.map((row) => row.id === editing.id ? saved : row));
+    setEditing(null);
+    setDraft(null);
+    showToast("保存成功");
   };
 
   const resetFilters = () => {
@@ -106,271 +166,209 @@ export default function MaterialManagement() {
     setSupplierFilter("");
   };
 
-  const openCreate = () => {
-    setEditing(null);
-    setErrors({});
-    setForm({ ...emptyForm });
-    setFormOpen(true);
-  };
-
-  const openEdit = (row: Material) => {
-    setEditing(row);
-    setErrors({});
-    setForm({
-      materialName: row.materialName,
-      materialCategory: row.materialCategory,
-      specification: row.specification,
-      materialPurpose: row.materialPurpose,
-      styleNo: row.styleNo,
-      composition: row.composition,
-      weight: row.weight,
-      width: row.width,
-      color: row.color,
-      colorCode: row.colorCode,
-      size: row.size,
-      baseUnit: row.baseUnit,
-      purchaseUnit: row.purchaseUnit,
-      inventoryUnit: row.inventoryUnit,
-      conversionRate: row.conversionRate,
-      defaultSupplier: row.defaultSupplier,
-      referencePurchasePrice: row.referencePurchasePrice,
-      currency: row.currency,
-      minPurchaseQty: row.minPurchaseQty,
-      purchaseLeadTime: row.purchaseLeadTime,
-      needInspection: row.needInspection,
-      inspectionRequirement: row.inspectionRequirement,
-      batchManagement: row.batchManagement,
-      colorSizeManagement: row.colorSizeManagement,
-      totalPurchaseOrders: row.totalPurchaseOrders,
-      totalPurchaseQty: row.totalPurchaseQty,
-      totalPurchaseAmount: row.totalPurchaseAmount,
-      recentPurchaseOrderNo: row.recentPurchaseOrderNo,
-      recentPurchaseDate: row.recentPurchaseDate,
-      remark: row.remark,
-    });
-    setFormOpen(true);
-  };
-
-  const validate = (isEdit: boolean) => {
-    const e: Errors = {};
-    const required: (keyof FormValues)[] = [
-      "materialName",
-      "materialCategory",
-      "specification",
-      "materialPurpose",
-      "baseUnit",
-      "purchaseUnit",
-      "inventoryUnit",
-      "needInspection",
-    ];
-
-    required.forEach((k) => {
-      if (k === "needInspection") {
-        if (form.needInspection === undefined) e.needInspection = "请选择是否需要质检";
-        return;
-      }
-      if (!String(form[k] ?? "").trim()) e[k] = `${selectFields.has(String(k)) ? "请选择" : "请输入"}${fieldLabel[k]}`;
-    });
-
-    if (form.referencePurchasePrice !== undefined && Number(form.referencePurchasePrice) < 0) e.referencePurchasePrice = "参考采购价不能小于 0";
-    if (form.minPurchaseQty !== undefined && Number(form.minPurchaseQty) < 0) e.minPurchaseQty = "最小采购量不能小于 0";
-    if (form.purchaseLeadTime !== undefined && Number(form.purchaseLeadTime) < 0) e.purchaseLeadTime = "采购提前期不能小于 0";
-
-    const dup = rows.some(
-      (x) =>
-        x.materialName === form.materialName &&
-        x.specification === form.specification &&
-        (x.color ?? "") === (form.color ?? "") &&
-        (x.colorCode ?? "") === (form.colorCode ?? "") &&
-        (!isEdit || x.id !== editing?.id),
-    );
-    if (dup) e.materialName = "当前物料名称、规格、颜色 / 色号已存在";
-
-    setErrors(e);
-    return Object.keys(e).length === 0;
-  };
-
-  const nextCode = (category: MaterialCategory) => {
-    const prefix = categoryPrefix[category];
-    const count = rows.filter((x) => x.materialCode.startsWith(`${prefix}-2026-`)).length + 1;
-    return `${prefix}-2026-${String(count).padStart(4, "0")}`;
-  };
-
-  const createMaterial = (status: MaterialStatus) => {
-    if (!validate(false)) return;
-    const item: Material = {
-      id: String(Date.now()),
-      materialCode: nextCode(form.materialCategory),
-      status,
-      createdBy: "当前用户",
-      createdAt: now(),
-      updatedAt: now(),
-      ...form,
-      needInspection: form.needInspection ?? false,
-    };
-    setRows((s) => [item, ...s]);
-    setFormOpen(false);
-    showToast(status === "草稿" ? "物料草稿已保存" : "物料已启用");
-  };
-
-  const saveEdit = () => {
-    if (!editing || !validate(true)) return;
-    setRows((s) =>
-      s.map((x) =>
-        x.id === editing.id ? { ...x, ...form, needInspection: form.needInspection ?? false, status: x.status, updatedAt: now() } : x,
-      ),
-    );
-    setFormOpen(false);
-    showToast("物料信息已更新");
-  };
-
   const doStatus = () => {
     if (!confirmRow || !confirmAction) return;
-    const next: MaterialStatus = confirmAction === "enable" ? "已启用" : "已停用";
-    setRows((s) => s.map((x) => (x.id === confirmRow.id ? { ...x, status: next, updatedAt: now() } : x)));
-    if (detail?.id === confirmRow.id) setDetail({ ...detail, status: next, updatedAt: now() });
+    const status: MaterialStatus = confirmAction === "enable" ? "已启用" : "已停用";
+    setRows((current) => current.map((row) => row.id === confirmRow.id ? { ...row, status, updatedBy: "当前用户", updatedAt: now() } : row));
+    if (detail?.id === confirmRow.id) setDetail({ ...detail, status, updatedBy: "当前用户", updatedAt: now() });
     setConfirmRow(null);
     setConfirmAction(null);
-    showToast(next === "已启用" ? "物料已启用" : "物料已停用");
+    showToast(status === "已启用" ? "物料已启用" : "物料已停用");
   };
 
   return (
     <div>
-      <PageHeader title="物料管理" desc="用于维护面料、辅料、纱线、包材、耗材、样衣、成衣等采购物料档案，并作为采购申请、采购订单、供应商发货和采购对账的基础数据。" />
+      <PageHeader title={title} desc={description} />
+
       <SearchBar>
         <div className="flex flex-wrap items-center gap-2">
-          <input className="h-8 w-80 rounded border px-2 text-sm" value={kwInput} onChange={(e) => setKwInput(e.target.value)} placeholder="搜索物料编码 / 物料名称 / 规格型号 / 颜色 / 色号" />
-          <select className="h-8 rounded border px-2 text-sm" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}><option value="">全部分类</option>{categories.map((x) => <option key={x}>{x}</option>)}</select>
-          <select className="h-8 rounded border px-2 text-sm" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}><option value="">全部状态</option>{["草稿", "已启用", "已停用"].map((x) => <option key={x}>{x}</option>)}</select>
-          <select className="h-8 rounded border px-2 text-sm" value={qcFilter} onChange={(e) => setQcFilter(e.target.value)}><option value="">全部</option><option value="true">是</option><option value="false">否</option></select>
-          <select className="h-8 rounded border px-2 text-sm" value={supplierFilter} onChange={(e) => setSupplierFilter(e.target.value)}><option value="">全部供应商</option>{supplierOptions.map((x) => <option key={x}>{x}</option>)}</select>
+          <input className="h-8 w-80 rounded border px-2 text-sm" value={kwInput} onChange={(event) => setKwInput(event.target.value)} placeholder="搜索物料编码 / 物料名称 / 规格型号 / 颜色 / 色号" />
+          <select className="h-8 rounded border px-2 text-sm" value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}><option value="">全部分类</option>{allowedCategories.map((item) => <option key={item}>{item}</option>)}</select>
+          <select className="h-8 rounded border px-2 text-sm" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">全部状态</option>{["草稿", "已启用", "已停用"].map((item) => <option key={item}>{item}</option>)}</select>
+          <select className="h-8 rounded border px-2 text-sm" value={qcFilter} onChange={(event) => setQcFilter(event.target.value)}><option value="">全部质检状态</option><option value="true">需质检</option><option value="false">无需质检</option></select>
+          <select className="h-8 rounded border px-2 text-sm" value={supplierFilter} onChange={(event) => setSupplierFilter(event.target.value)}><option value="">全部供应商</option>{supplierOptions.map((item) => <option key={item}>{item}</option>)}</select>
           <button className="h-8 rounded bg-brand px-3 text-sm text-white" onClick={() => setKw(kwInput)}>查询</button>
           <button className="h-8 rounded border border-gray-300 px-3 text-sm" onClick={resetFilters}>清除</button>
-          <button className="ml-auto h-8 rounded bg-brand px-3 text-sm text-white" onClick={openCreate}>新增物料</button>
         </div>
       </SearchBar>
 
       <DataTable
         columns={[
-          { key: "materialCode", title: "物料编码", render: (r) => <button className="text-blue-600" onClick={() => setDetail(r)}>{r.materialCode}</button> },
+          { key: "materialCode", title: "物料编码", render: (row) => <button className="text-blue-600" onClick={() => setDetail(row)}>{row.materialCode}</button> },
           { key: "materialName", title: "物料名称" },
           { key: "materialCategory", title: "物料分类" },
           { key: "specification", title: "规格型号" },
-          { key: "color", title: "颜色/色号", render: (r) => `${r.color || "-"}${r.colorCode ? ` / ${r.colorCode}` : ""}` },
+          { key: "color", title: "颜色/色号", render: (row) => `${row.color || "-"}${row.colorCode ? ` / ${row.colorCode}` : ""}` },
           { key: "baseUnit", title: "单位" },
           { key: "purchaseUnit", title: "采购单位" },
           { key: "inventoryUnit", title: "库存单位" },
           { key: "defaultSupplier", title: "默认供应商" },
-          { key: "needInspection", title: "是否需质检", render: (r) => <span className={`rounded-full px-2 py-0.5 text-xs ${r.needInspection ? "bg-orange-100 text-orange-700" : "bg-gray-100 text-gray-700"}`}>{r.needInspection ? "是" : "否"}</span> },
-          { key: "status", title: "状态", render: (r) => <StatusBadge status={r.status} /> },
+          { key: "needInspection", title: "是否需质检", render: (row) => <span className={`rounded-full px-2 py-0.5 text-xs ${row.needInspection ? "bg-orange-100 text-orange-700" : "bg-gray-100 text-gray-700"}`}>{row.needInspection ? "是" : "否"}</span> },
+          { key: "status", title: "状态", render: (row) => <StatusBadge status={row.status} /> },
           { key: "createdBy", title: "创建人" },
           { key: "createdAt", title: "创建时间" },
           {
-            key: "op",
+            key: "operation",
             title: "操作",
-            render: (r) => (
-              <div className="space-x-2 whitespace-nowrap text-xs">
-                <button className="text-blue-600" onClick={() => setDetail(r)}>查看</button>
-                <button className="text-blue-600" onClick={() => openEdit(r)}>编辑</button>
-                {r.status !== "已启用" && <button className="text-green-600" onClick={() => { setConfirmRow(r); setConfirmAction("enable"); }}>启用</button>}
-                {r.status === "已启用" && <button className="text-red-600" onClick={() => { setConfirmRow(r); setConfirmAction("disable"); }}>停用</button>}
-              </div>
-            ),
+            render: (row) => <div className="space-x-2 whitespace-nowrap text-xs">
+              <button className="text-blue-600" onClick={() => setDetail(row)}>查看</button>
+              <button className="text-blue-600" onClick={() => openEdit(row)}>编辑</button>
+              {row.status === "已启用"
+                ? <button className="text-red-600" onClick={() => { setConfirmRow(row); setConfirmAction("disable"); }}>停用</button>
+                : <button className="text-green-600" onClick={() => { setConfirmRow(row); setConfirmAction("enable"); }}>启用</button>}
+            </div>,
           },
         ]}
         rows={filtered}
       />
 
-      <div className="mt-3 rounded border border-gray-200 bg-white p-4">
-        <h3 className="mb-3 font-semibold">设计逻辑说明</h3>
-        <LogicTable
-          title="七、表单校验规则"
-          headers={["字段", "是否必填", "校验规则", "错误提示"]}
-          rows={[
-            ["物料名称", "是", "不可为空", "请输入物料名称"],
-            ["物料分类", "是", "必须选择", "请选择物料分类"],
-            ["规格型号", "是", "不可为空", "请输入规格型号"],
-            ["物料用途", "是", "必须选择", "请选择物料用途"],
-            ["基础单位", "是", "必须选择", "请选择基础单位"],
-            ["采购单位", "是", "必须选择", "请选择采购单位"],
-            ["库存单位", "是", "必须选择", "请选择库存单位"],
-            ["是否需要质检", "是", "必须选择", "请选择是否需要质检"],
-            ["参考采购价", "否", "必须大于等于 0", "参考采购价不能小于 0"],
-            ["最小采购量", "否", "必须大于等于 0", "最小采购量不能小于 0"],
-            ["采购提前期", "否", "必须大于等于 0", "采购提前期不能小于 0"],
-          ]}
-        />
-        <LogicTable
-          title="重复校验规则"
-          headers={["场景", "校验方式"]}
-          rows={[
-            ["新增物料", "物料名称 + 规格型号 + 颜色 / 色号不能重复"],
-            ["编辑物料", "排除当前物料后再比较"],
-            ["校验失败", "弹窗不关闭，数据不保存，字段下方展示错误提示"],
-          ]}
-        />
-      </div>
+      <DesignLogicCard sections={[
+        {
+          title: "页面定位",
+          headers: ["项目", "说明"],
+          rows: [
+            ["页面名称", title],
+            ["所属模块", "基础资料"],
+            ["页面目标", "查看和维护商品中心同步过来的采购物料资料"],
+            ["上游来源", "商品中心 PCS"],
+            ["下游去向", "面辅料采购单、采购建议、报关申报、采购对账"],
+            ["核心规则", "PMS 不新增物料，只编辑同步物料的采购、申报、报关补充信息"],
+          ],
+        },
+        {
+          title: "核心业务规则",
+          headers: ["场景", "规则"],
+          rows: [
+            ["新增物料", "不允许，物料由商品中心 PCS 同步生成"],
+            ["编辑物料", "仅维护 PMS 采购、申报、报关补充信息，不反写 PCS 主数据"],
+            ["物料编码", "商品中心同步，不允许修改"],
+            ["申报信息", "用于跨境申报和平台资料"],
+            ["报关信息", "用于出口报关和进口清关"],
+            ["停用 / 启用", "停用后不允许在新采购单中选择，启用后恢复可选"],
+          ],
+        },
+      ]} />
 
-      <FormModal open={formOpen} onClose={() => setFormOpen(false)} title={editing ? "编辑物料" : "新增物料"} widthClass="w-[760px]">
-        {editing && <div className="mb-3 rounded bg-gray-50 px-3 py-2 text-sm">物料编码：{editing.materialCode}</div>}
-        <div className="grid grid-cols-2 gap-3 text-sm">
-          {renderInput("materialName", "物料名称", form, setForm, errors, true)}
-          {renderSelect("materialCategory", "物料分类", form, setForm, errors, categories, true)}
-          {renderInput("specification", "规格型号", form, setForm, errors, true)}
-          {renderSelect("materialPurpose", "物料用途", form, setForm, errors, purposes, true)}
-          {renderInput("styleNo", "款号", form, setForm, errors)}
-          {renderInput("composition", "成分", form, setForm, errors)}
-          {renderInput("weight", "克重", form, setForm, errors)}
-          {renderInput("width", "幅宽", form, setForm, errors)}
-          {renderInput("color", "颜色", form, setForm, errors)}
-          {renderInput("colorCode", "色号", form, setForm, errors)}
-          {renderInput("size", "尺码", form, setForm, errors)}
-          {renderSelect("baseUnit", "基础单位", form, setForm, errors, units, true)}
-          {renderSelect("purchaseUnit", "采购单位", form, setForm, errors, units, true)}
-          {renderSelect("inventoryUnit", "库存单位", form, setForm, errors, units, true)}
-          {renderInput("conversionRate", "换算关系", form, setForm, errors)}
-          {renderSelect("defaultSupplier", "默认供应商", form, setForm, errors, supplierOptions)}
-          {renderNumber("referencePurchasePrice", "参考采购价", form, setForm, errors)}
-          {renderSelect("currency", "币种", form, setForm, errors, currencies)}
-          {renderNumber("minPurchaseQty", "最小采购量", form, setForm, errors)}
-          {renderNumber("purchaseLeadTime", "采购提前期", form, setForm, errors)}
-          {renderBoolean("needInspection", "是否需要质检", form, setForm, errors, true)}
-          {renderInput("inspectionRequirement", "质检要求", form, setForm, errors)}
-          {renderBoolean("batchManagement", "启用批次管理", form, setForm, errors)}
-          {renderBoolean("colorSizeManagement", "启用颜色尺码", form, setForm, errors)}
-          <div className="col-span-2">{renderInput("remark", "备注", form, setForm, errors)}</div>
-        </div>
-        <div className="sticky bottom-0 mt-4 flex justify-end gap-2 border-t bg-white pt-3">
-          <button className="rounded border border-gray-300 px-3 py-1.5 text-sm" onClick={() => setFormOpen(false)}>取消</button>
-          {!editing && <button className="rounded border border-gray-300 px-3 py-1.5 text-sm" onClick={() => createMaterial("草稿")}>保存草稿</button>}
-          {!editing && <button className="rounded bg-brand px-3 py-1.5 text-sm text-white" onClick={() => createMaterial("已启用")}>保存并启用</button>}
-          {editing && <button className="rounded bg-brand px-3 py-1.5 text-sm text-white" onClick={saveEdit}>保存</button>}
-        </div>
-      </FormModal>
+      {draft && editing && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-[1px]">
+          <div className="flex max-h-[calc(100vh-32px)] w-full max-w-[1160px] flex-col overflow-hidden rounded-xl border border-white/60 bg-slate-50 shadow-[0_24px_80px_rgba(15,23,42,0.28)]">
+            <div className="flex shrink-0 items-center justify-between border-b border-slate-200 bg-white px-6 py-4">
+              <div>
+                <h2 className="text-base font-semibold text-slate-900">修改物料信息</h2>
+                <p className="mt-1 text-xs text-slate-500">维护 PMS 采购、申报与报关补充资料，物料编码及 PCS 来源信息保持只读。</p>
+              </div>
+              <button className="flex h-8 w-8 items-center justify-center rounded-md text-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700" aria-label="关闭修改物料信息" onClick={() => { setEditing(null); setDraft(null); }}>×</button>
+            </div>
+            <div className="flex-1 space-y-4 overflow-y-auto p-5">
+              <FormSection index="01" title="基础信息" description="商品中心同步的核心资料及 PMS 采购状态">
+                <Field label="物料编码" required error={errors.materialCode}><input className={`${inputClass} cursor-not-allowed bg-slate-100 text-slate-500`} value={draft.materialCode} disabled /></Field>
+                <Field label="物料名称"><input className={inputClass} value={draft.materialName} onChange={(event) => updateDraft("materialName", event.target.value)} /></Field>
+                <Field label="物料分类" required error={errors.materialCategory}><Select value={draft.materialCategory} options={categories} onChange={(value) => updateDraft("materialCategory", value as MaterialCategory)} /></Field>
+                <Field label="规格型号"><input className={inputClass} value={draft.specification} onChange={(event) => updateDraft("specification", event.target.value)} /></Field>
+                <Field label="颜色 / 色号"><div className="grid grid-cols-2 gap-2"><input className={inputClass} value={draft.color ?? ""} onChange={(event) => updateDraft("color", event.target.value)} placeholder="颜色" /><input className={inputClass} value={draft.colorCode ?? ""} onChange={(event) => updateDraft("colorCode", event.target.value)} placeholder="色号" /></div></Field>
+                <Field label="状态"><Select value={draft.status} options={["草稿", "已启用", "已停用"]} onChange={(value) => updateDraft("status", value as MaterialStatus)} /></Field>
+                <Field label="默认供应商"><Select value={draft.defaultSupplier ?? ""} options={supplierOptions} onChange={(value) => updateDraft("defaultSupplier", value)} allowEmpty /></Field>
+                <Field label="是否需质检"><Radio value={draft.needInspection} onChange={(value) => updateDraft("needInspection", value)} /></Field>
+              </FormSection>
 
-      <DetailModal open={!!detail} onClose={() => setDetail(null)} title="物料详情">
-        {detail && (
-          <div className="space-y-3 text-sm">
-            <Section title="基础信息" pairs={[["物料编码", detail.materialCode], ["物料名称", detail.materialName], ["物料分类", detail.materialCategory], ["规格型号", detail.specification], ["物料用途", detail.materialPurpose || "-"], ["状态", detail.status]]} />
-            <div className="flex justify-end gap-2">
-              <button className="rounded border border-gray-300 px-3 py-1.5 text-sm" onClick={() => setDetail(null)}>关闭</button>
-              <button className="rounded border border-gray-300 px-3 py-1.5 text-sm" onClick={() => { setDetail(null); openEdit(detail); }}>编辑</button>
-              {detail.status === "已启用" ? (
-                <button className="rounded bg-red-600 px-3 py-1.5 text-sm text-white" onClick={() => { setConfirmRow(detail); setConfirmAction("disable"); }}>停用</button>
-              ) : (
-                <button className="rounded bg-green-600 px-3 py-1.5 text-sm text-white" onClick={() => { setConfirmRow(detail); setConfirmAction("enable"); }}>启用</button>
-              )}
+              <FormSection index="02" title="采购与单位信息" description="采购计价、库存核算及单位换算设置">
+                <Field label="基础单位" required error={errors.baseUnit}><Select value={draft.baseUnit} options={units} onChange={(value) => updateDraft("baseUnit", value as Unit)} /></Field>
+                <Field label="采购单位" required error={errors.purchaseUnit}><Select value={draft.purchaseUnit} options={units} onChange={(value) => updateDraft("purchaseUnit", value as Unit)} /></Field>
+                <Field label="库存单位" required error={errors.inventoryUnit}><Select value={draft.inventoryUnit} options={units} onChange={(value) => updateDraft("inventoryUnit", value as Unit)} /></Field>
+                <Field label="单位换算关系"><input className={inputClass} value={draft.conversionRate ?? ""} onChange={(event) => updateDraft("conversionRate", event.target.value)} placeholder="例如：1卷=100米" /></Field>
+                <Field label="默认采购价" error={errors.referencePurchasePrice}><input className={inputClass} type="number" min="0" value={draft.referencePurchasePrice ?? ""} onChange={(event) => updateDraft("referencePurchasePrice", event.target.value === "" ? undefined : Number(event.target.value))} /></Field>
+                <Field label="默认币种"><Select value={draft.currency ?? "RMB"} options={currencies} onChange={(value) => updateDraft("currency", value as Currency)} /></Field>
+                <Field label="默认采购区域"><Select value={draft.defaultPurchaseRegion ?? "国内"} options={purchaseRegions} onChange={(value) => updateDraft("defaultPurchaseRegion", value as PurchaseRegion)} /></Field>
+                <Field label="备注" wide><textarea className="min-h-20 w-full rounded-md border border-slate-200 bg-white p-3 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 hover:border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-100" value={draft.remark ?? ""} onChange={(event) => updateDraft("remark", event.target.value)} placeholder="填写采购相关补充说明" /></Field>
+              </FormSection>
+
+              <FormSection index="03" title="申报信息" description="跨境平台申报、清关品名及产品属性">
+                <TextField label="中文清关名" value={draft.declarationInfo?.chineseClearanceName} onChange={(value) => updateDeclaration("chineseClearanceName", value)} />
+                <TextField label="英文清关名" value={draft.declarationInfo?.englishClearanceName} onChange={(value) => updateDeclaration("englishClearanceName", value)} />
+                <TextField label="材质英文" value={draft.declarationInfo?.materialEnglish} onChange={(value) => updateDeclaration("materialEnglish", value)} />
+                <TextField label="用途英文" value={draft.declarationInfo?.usageEnglish} onChange={(value) => updateDeclaration("usageEnglish", value)} />
+                <TextField label="织造方式" value={draft.declarationInfo?.weavingMethod} onChange={(value) => updateDeclaration("weavingMethod", value)} />
+                <Field label="品牌类型"><Select value={draft.declarationInfo?.brandType ?? "无品牌"} options={brandTypes} onChange={(value) => updateDeclaration("brandType", value as BrandType)} /></Field>
+                <TextField label="产品材质" value={draft.declarationInfo?.productMaterial} onChange={(value) => updateDeclaration("productMaterial", value)} />
+                <TextField label="产品用途" value={draft.declarationInfo?.productUsage} onChange={(value) => updateDeclaration("productUsage", value)} />
+                <TextField label="产品型号" value={draft.declarationInfo?.productModel} onChange={(value) => updateDeclaration("productModel", value)} />
+                <TextField label="申报品牌名称" value={draft.declarationInfo?.declarationBrandName} onChange={(value) => updateDeclaration("declarationBrandName", value)} />
+                <TextField label="品牌英文名称" value={draft.declarationInfo?.brandEnglishName} onChange={(value) => updateDeclaration("brandEnglishName", value)} />
+                <Field label="产品申报图片" error={errors.declarationImageUrl}>
+                  <label className="flex h-9 cursor-pointer items-center justify-between rounded-md border border-dashed border-blue-200 bg-blue-50/60 px-3 text-xs text-blue-700 transition hover:border-blue-400 hover:bg-blue-50">
+                    <span className="truncate">{draft.declarationInfo?.declarationImageUrl || "选择申报图片"}</span>
+                    <span className="ml-2 shrink-0 font-medium">上传</span>
+                    <input className="hidden" type="file" accept=".png,.jpg,.jpeg,image/png,image/jpeg" onChange={handleImage} />
+                  </label>
+                  <div className="mt-1 text-[11px] text-slate-400">大小不超过 5MB，支持 png / jpg / jpeg</div>
+                </Field>
+                <Field label="特殊属性" wide>
+                  <div className="grid grid-cols-4 gap-2 rounded-lg border border-slate-200 bg-slate-50/80 p-3 md:grid-cols-6">
+                    {specialAttributes.map((attribute) => <label key={attribute} className={`flex cursor-pointer items-center gap-1.5 rounded px-2 py-1.5 text-xs transition ${(draft.declarationInfo?.specialAttributes ?? []).includes(attribute) ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-white"}`}><input className="accent-blue-600" type="checkbox" checked={(draft.declarationInfo?.specialAttributes ?? []).includes(attribute)} onChange={(event) => {
+                      const current = draft.declarationInfo?.specialAttributes ?? [];
+                      updateDeclaration("specialAttributes", event.target.checked ? [...current, attribute] : current.filter((item) => item !== attribute));
+                    }} />{attribute}</label>)}
+                  </div>
+                </Field>
+              </FormSection>
+
+              <FormSection index="04" title="报关信息" description="出口报关、进口清关及海关计量资料">
+                <TextField label="中文报关名" required={draft.customsInfo?.needCustomsDeclaration} error={errors.chineseCustomsName} value={draft.customsInfo?.chineseCustomsName} onChange={(value) => updateCustoms("chineseCustomsName", value)} />
+                <TextField label="英文报关名" required={draft.customsInfo?.needCustomsDeclaration} error={errors.englishCustomsName} value={draft.customsInfo?.englishCustomsName} onChange={(value) => updateCustoms("englishCustomsName", value)} />
+                <TextField label="原产国 / 地区" value={draft.customsInfo?.originCountryOrRegion} onChange={(value) => updateCustoms("originCountryOrRegion", value)} />
+                <TextField label="境内货源地" value={draft.customsInfo?.domesticSourcePlace} onChange={(value) => updateCustoms("domesticSourcePlace", value)} />
+                <Field label="征免"><Select value={draft.customsInfo?.taxExemptionType ?? "照章征税"} options={exemptionTypes} onChange={(value) => updateCustoms("taxExemptionType", value as TaxExemptionType)} /></Field>
+                <TextField label="其他申报要素" value={draft.customsInfo?.otherDeclarationElements} onChange={(value) => updateCustoms("otherDeclarationElements", value)} />
+                <TextField label="报关材质" value={draft.customsInfo?.customsMaterial} onChange={(value) => updateCustoms("customsMaterial", value)} />
+                <TextField label="报关用途" value={draft.customsInfo?.customsUsage} onChange={(value) => updateCustoms("customsUsage", value)} />
+                <TextField label="规格型号" value={draft.customsInfo?.customsSpecificationModel} onChange={(value) => updateCustoms("customsSpecificationModel", value)} />
+                <Field label="是否报关" required><Radio value={draft.customsInfo?.needCustomsDeclaration ?? true} onChange={(value) => updateCustoms("needCustomsDeclaration", value)} /></Field>
+                <Field label="成交单位" required={draft.customsInfo?.needCustomsDeclaration} error={errors.transactionUnit}><Select value={draft.customsInfo?.transactionUnit ?? ""} options={units} onChange={(value) => updateCustoms("transactionUnit", value)} allowEmpty /></Field>
+                <Field label="法定第二计量单位"><Select value={draft.customsInfo?.legalSecondUnit ?? ""} options={units} onChange={(value) => updateCustoms("legalSecondUnit", value)} allowEmpty /></Field>
+                <Field label="法定第二计量单位数值" error={errors.legalSecondUnitValue}><input className={inputClass} type="number" min="0" value={draft.customsInfo?.legalSecondUnitValue ?? ""} onChange={(event) => updateCustoms("legalSecondUnitValue", event.target.value === "" ? undefined : Number(event.target.value))} /></Field>
+              </FormSection>
+
+              <FormSection index="05" title="系统信息" description="PCS 同步来源及操作记录，仅供查看">
+                {[
+                  ["数据来源", draft.systemInfo?.dataSource ?? "商品中心同步"],
+                  ["来源系统", draft.systemInfo?.sourceSystem ?? "PCS"],
+                  ["来源商品编码", draft.systemInfo?.sourceProductCode ?? "-"],
+                  ["同步时间", draft.systemInfo?.syncedAt ?? "-"],
+                  ["创建人", draft.createdBy],
+                  ["创建时间", draft.createdAt],
+                  ["更新人", draft.updatedBy ?? draft.systemInfo?.updatedBy ?? "-"],
+                  ["更新时间", draft.updatedAt ?? draft.systemInfo?.updatedAt ?? "-"],
+                ].map(([label, value]) => <Field key={label} label={label}><div className="flex h-9 items-center rounded-md border border-slate-200 bg-slate-100 px-3 text-sm text-slate-500">{value}</div></Field>)}
+              </FormSection>
+            </div>
+            <div className="flex shrink-0 items-center justify-between border-t border-slate-200 bg-white px-6 py-3">
+              <span className="text-xs text-slate-400">保存内容仅更新 PMS 补充信息，不反写商品中心 PCS。</span>
+              <div className="flex gap-2">
+                <button className="h-9 rounded-md border border-slate-300 bg-white px-5 text-sm text-slate-600 transition hover:bg-slate-50" onClick={() => { setEditing(null); setDraft(null); }}>取消</button>
+                <button className="h-9 rounded-md bg-blue-600 px-6 text-sm font-medium text-white shadow-sm transition hover:bg-blue-700" onClick={saveEdit}>保存修改</button>
+              </div>
             </div>
           </div>
-        )}
+        </div>
+      )}
+
+      <DetailModal open={Boolean(detail)} onClose={() => setDetail(null)} title="查看物料信息">
+        {detail && <div className="space-y-3 text-sm">
+          <SummarySection title="基础信息" pairs={[["物料编码", detail.materialCode], ["物料名称", detail.materialName], ["物料分类", detail.materialCategory], ["规格型号", detail.specification], ["状态", detail.status], ["数据来源", detail.systemInfo?.dataSource ?? "商品中心同步"]]} />
+          <SummarySection title="申报 / 报关" pairs={[["中文清关名", detail.declarationInfo?.chineseClearanceName ?? "-"], ["英文清关名", detail.declarationInfo?.englishClearanceName ?? "-"], ["中文报关名", detail.customsInfo?.chineseCustomsName ?? "-"], ["是否报关", detail.customsInfo?.needCustomsDeclaration === false ? "否" : "是"]]} />
+          <div className="flex justify-end gap-2">
+            <button className="rounded border px-3 py-1.5" onClick={() => setDetail(null)}>关闭</button>
+            <button className="rounded border px-3 py-1.5" onClick={() => { setDetail(null); openEdit(detail); }}>编辑</button>
+          </div>
+        </div>}
       </DetailModal>
 
       <ConfirmModal
-        open={!!confirmRow && !!confirmAction}
+        open={Boolean(confirmRow && confirmAction)}
         onClose={() => { setConfirmRow(null); setConfirmAction(null); }}
         onConfirm={doStatus}
         title={confirmAction === "enable" ? "确认启用物料？" : "确认停用物料？"}
-        content={confirmAction === "enable" ? "启用后，该物料可用于采购申请、采购订单和供应商协同。" : "停用后，该物料将不能再用于新建采购申请和采购订单，但历史单据不受影响。"}
+        content={confirmAction === "enable" ? "启用后，该物料可用于采购流程。" : "停用后，该物料不能再用于新采购单，历史单据不受影响。"}
         confirmText={confirmAction === "enable" ? "确认启用" : "确认停用"}
       />
       <Toast msg={toast} />
@@ -378,94 +376,48 @@ export default function MaterialManagement() {
   );
 }
 
-const fieldLabel: Record<string, string> = {
-  materialName: "物料名称",
-  materialCategory: "物料分类",
-  specification: "规格型号",
-  materialPurpose: "物料用途",
-  baseUnit: "基础单位",
-  purchaseUnit: "采购单位",
-  inventoryUnit: "库存单位",
-  needInspection: "是否需要质检",
-};
-const selectFields = new Set(["materialCategory", "materialPurpose", "baseUnit", "purchaseUnit", "inventoryUnit", "needInspection"]);
-
-function Label({ text, required }: { text: string; required?: boolean }) {
-  return (
-    <div className="mb-1 text-xs text-gray-600">
-      {text}
-      {required && <span className="ml-1 text-red-500">*</span>}
-    </div>
-  );
-}
-
-function renderInput(key: keyof FormValues, label: string, form: FormValues, setForm: Dispatch<SetStateAction<FormValues>>, errors: Errors, required = false) {
-  return (
-    <label className="block">
-      <Label text={label} required={required} />
-      <input className={`h-8 w-full rounded border px-2 text-sm ${errors[key] ? "border-red-500" : "border-gray-300"}`} value={String(form[key] ?? "")} onChange={(e) => setForm((s) => ({ ...s, [key]: e.target.value }))} />
-      {errors[key] && <div className="mt-1 text-xs text-red-500">{errors[key]}</div>}
-    </label>
-  );
-}
-
-function renderNumber(key: keyof FormValues, label: string, form: FormValues, setForm: Dispatch<SetStateAction<FormValues>>, errors: Errors) {
-  return (
-    <label className="block">
-      <Label text={label} />
-      <input type="number" className={`h-8 w-full rounded border px-2 text-sm ${errors[key] ? "border-red-500" : "border-gray-300"}`} value={form[key] === undefined ? "" : String(form[key])} onChange={(e) => setForm((s) => ({ ...s, [key]: e.target.value === "" ? undefined : Number(e.target.value) }))} />
-      {errors[key] && <div className="mt-1 text-xs text-red-500">{errors[key]}</div>}
-    </label>
-  );
-}
-
-function renderSelect(key: keyof FormValues, label: string, form: FormValues, setForm: Dispatch<SetStateAction<FormValues>>, errors: Errors, options: string[], required = false) {
-  return (
-    <label className="block">
-      <Label text={label} required={required} />
-      <select className={`h-8 w-full rounded border px-2 text-sm ${errors[key] ? "border-red-500" : "border-gray-300"}`} value={String(form[key] ?? "")} onChange={(e) => setForm((s) => ({ ...s, [key]: e.target.value }))}>
-        <option value="">请选择</option>
-        {options.map((x) => <option key={x}>{x}</option>)}
-      </select>
-      {errors[key] && <div className="mt-1 text-xs text-red-500">{errors[key]}</div>}
-    </label>
-  );
-}
-
-function renderBoolean(key: keyof FormValues, label: string, form: FormValues, setForm: Dispatch<SetStateAction<FormValues>>, errors: Errors, required = false) {
-  const raw = form[key];
-  return (
-    <label className="block">
-      <Label text={label} required={required} />
-      <select className={`h-8 w-full rounded border px-2 text-sm ${errors[key] ? "border-red-500" : "border-gray-300"}`} value={raw === undefined ? "" : raw ? "true" : "false"} onChange={(e) => setForm((s) => ({ ...s, [key]: e.target.value === "" ? undefined : e.target.value === "true" }))}>
-        <option value="">请选择</option>
-        <option value="true">是</option>
-        <option value="false">否</option>
-      </select>
-      {errors[key] && <div className="mt-1 text-xs text-red-500">{errors[key]}</div>}
-    </label>
-  );
-}
-
-function Section({ title, pairs }: { title: string; pairs: [string, string][] }) {
-  return (
-    <div className="rounded border border-gray-200 p-3">
-      <div className="mb-2 font-medium">{title}</div>
-      <div className="grid grid-cols-2 gap-2">{pairs.map(([k, v]) => <div key={`${title}-${k}`}><span className="text-gray-500">{k}：</span>{v}</div>)}</div>
-    </div>
-  );
-}
-
-function LogicTable({ title, headers, rows }: { title: string; headers: string[]; rows: string[][] }) {
-  return (
-    <div className="mb-4">
-      <h4 className="mb-2 text-sm font-semibold text-gray-800">{title}</h4>
-      <div className="overflow-x-auto rounded border border-gray-200">
-        <table className="min-w-full text-left text-xs">
-          <thead className="bg-gray-50"><tr>{headers.map((h) => <th key={h} className="border-b border-gray-200 px-2 py-2 font-medium text-gray-700">{h}</th>)}</tr></thead>
-          <tbody>{rows.map((r, i) => <tr key={`${title}-${i}`} className="border-b border-gray-100 last:border-b-0">{r.map((c, j) => <td key={`${title}-${i}-${j}`} className="px-2 py-2 text-gray-700">{c}</td>)}</tr>)}</tbody>
-        </table>
+function FormSection({ index, title, description, children }: { index: string; title: string; description: string; children: ReactNode }) {
+  return <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+    <div className="flex items-center gap-3 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white px-4 py-3">
+      <span className="flex h-7 w-7 items-center justify-center rounded-md bg-blue-600 text-xs font-semibold text-white">{index}</span>
+      <div>
+        <h3 className="text-sm font-semibold text-slate-800">{title}</h3>
+        <p className="mt-0.5 text-[11px] text-slate-400">{description}</p>
       </div>
     </div>
-  );
+    <div className="grid grid-cols-2 gap-x-4 gap-y-3 p-4 lg:grid-cols-3">{children}</div>
+  </section>;
+}
+
+function Field({ label, required, error, wide, children }: { label: string; required?: boolean; error?: string; wide?: boolean; children: ReactNode }) {
+  return <label className={wide ? "col-span-full" : "block"}>
+    <div className="mb-1.5 text-xs font-medium text-slate-600">{label}{required && <span className="ml-1 text-red-500">*</span>}</div>
+    {children}
+    {error && <div className="mt-1 text-xs text-red-500">{error}</div>}
+  </label>;
+}
+
+function TextField({ label, value, onChange, required, error }: { label: string; value?: string; onChange: (value: string) => void; required?: boolean; error?: string }) {
+  return <Field label={label} required={required} error={error}><input className={`${inputClass} ${error ? "border-red-500" : ""}`} value={value ?? ""} onChange={(event) => onChange(event.target.value)} /></Field>;
+}
+
+function Select({ value, options, labels, onChange, allowEmpty }: { value: string; options: readonly string[]; labels?: Record<string, string>; onChange: (value: string) => void; allowEmpty?: boolean }) {
+  return <select className={inputClass} value={value} onChange={(event) => onChange(event.target.value)}>
+    {allowEmpty && <option value="">请选择</option>}
+    {options.map((option) => <option key={option} value={option}>{labels?.[option] ?? option}</option>)}
+  </select>;
+}
+
+function Radio({ value, onChange }: { value: boolean; onChange: (value: boolean) => void }) {
+  return <div className="flex h-9 items-center gap-2 rounded-md border border-slate-200 bg-slate-50 p-1 text-sm">
+    <label className={`flex h-7 flex-1 cursor-pointer items-center justify-center gap-1 rounded transition ${value ? "bg-white font-medium text-blue-600 shadow-sm" : "text-slate-500"}`}><input className="sr-only" type="radio" checked={value} onChange={() => onChange(true)} />是</label>
+    <label className={`flex h-7 flex-1 cursor-pointer items-center justify-center gap-1 rounded transition ${!value ? "bg-white font-medium text-blue-600 shadow-sm" : "text-slate-500"}`}><input className="sr-only" type="radio" checked={!value} onChange={() => onChange(false)} />否</label>
+  </div>;
+}
+
+function SummarySection({ title, pairs }: { title: string; pairs: [string, string][] }) {
+  return <section className="rounded border border-gray-200 p-3">
+    <h3 className="mb-2 font-medium">{title}</h3>
+    <div className="grid grid-cols-2 gap-2">{pairs.map(([label, value]) => <div key={label}><span className="text-gray-500">{label}：</span>{value}</div>)}</div>
+  </section>;
 }

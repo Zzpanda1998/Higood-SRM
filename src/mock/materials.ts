@@ -1,6 +1,6 @@
 import type { Material } from "../types/material";
 
-export const materials: Material[] = [
+const baseMaterials: Material[] = [
   { id: "1", materialCode: "FAB-2026-0001", materialName: "180g 纯棉针织布", materialCategory: "面料", specification: "180g", materialPurpose: "生产用", composition: "100%棉", weight: "180g", width: "175cm", color: "白色", colorCode: "W01", baseUnit: "米", purchaseUnit: "米", inventoryUnit: "米", conversionRate: "1卷=100米", defaultSupplier: "广州华盛面料有限公司", referencePurchasePrice: 26.5, currency: "RMB", minPurchaseQty: 500, purchaseLeadTime: 12, needInspection: true, inspectionRequirement: "克重与色差抽检", batchManagement: true, colorSizeManagement: false, status: "已启用", totalPurchaseOrders: 46, totalPurchaseQty: 68000, totalPurchaseAmount: 1802000, recentPurchaseOrderNo: "PO-2026-0001", recentPurchaseDate: "2026-05-18", createdBy: "采购员", createdAt: "2026-01-10 09:20:00", updatedAt: "2026-05-18 14:10:00", remark: "夏季常备面料" },
   { id: "2", materialCode: "FAB-2026-0002", materialName: "220g 涤棉卫衣布", materialCategory: "面料", specification: "220g", materialPurpose: "生产用", composition: "65%棉35%涤", weight: "220g", width: "185cm", color: "黑色", colorCode: "BK01", baseUnit: "米", purchaseUnit: "米", inventoryUnit: "米", defaultSupplier: "绍兴锦达纺织有限公司", referencePurchasePrice: 29.8, currency: "RMB", minPurchaseQty: 400, purchaseLeadTime: 15, needInspection: true, status: "已启用", totalPurchaseOrders: 31, totalPurchaseQty: 42000, totalPurchaseAmount: 1251600, recentPurchaseOrderNo: "PO-2026-0008", recentPurchaseDate: "2026-05-21", createdBy: "采购员", createdAt: "2026-01-10 10:20:00", updatedAt: "2026-05-21 11:40:00", remark: "" },
   { id: "3", materialCode: "YAR-2026-0001", materialName: "32S 棉纱", materialCategory: "纱线", specification: "32S", materialPurpose: "生产用", color: "本白", baseUnit: "公斤", purchaseUnit: "公斤", inventoryUnit: "公斤", defaultSupplier: "宁波恒源纱线有限公司", referencePurchasePrice: 21.2, currency: "USD", needInspection: true, status: "已启用", totalPurchaseOrders: 22, totalPurchaseQty: 12500, totalPurchaseAmount: 265000, recentPurchaseOrderNo: "PO-2026-0003", recentPurchaseDate: "2026-05-22", createdBy: "采购员", createdAt: "2026-01-11 09:20:00", updatedAt: "2026-05-22 16:30:00", remark: "" },
@@ -16,3 +16,43 @@ export const materials: Material[] = [
   { id: "13", materialCode: "ACC-2026-0004", materialName: "涤纶缝纫线", materialCategory: "辅料", specification: "40S/2", materialPurpose: "生产用", color: "白色", colorCode: "W01", baseUnit: "卷", purchaseUnit: "卷", inventoryUnit: "卷", defaultSupplier: "泉州瑞达服装辅料有限公司", needInspection: false, status: "已启用", totalPurchaseOrders: 14, totalPurchaseQty: 7500, totalPurchaseAmount: 97500, recentPurchaseOrderNo: "PO-2026-0015", recentPurchaseDate: "2026-05-17", createdBy: "采购员", createdAt: "2026-02-10 15:00:00", updatedAt: "2026-05-17 10:10:00", remark: "" },
   { id: "14", materialCode: "PKG-2026-0004", materialName: "印花包装贴纸", materialCategory: "包材", specification: "5x8cm", materialPurpose: "包装用", baseUnit: "个", purchaseUnit: "个", inventoryUnit: "个", defaultSupplier: "苏州恒润包装材料有限公司", needInspection: false, status: "已停用", totalPurchaseOrders: 5, totalPurchaseQty: 14000, totalPurchaseAmount: 9800, recentPurchaseOrderNo: "PO-2026-0005", recentPurchaseDate: "2026-04-30", createdBy: "采购主管", createdAt: "2026-02-15 10:20:00", updatedAt: "2026-05-08 16:20:00", remark: "旧版贴纸停用" },
 ];
+
+export const materials: Material[] = baseMaterials.map((material, index) => ({
+  ...material,
+  defaultPurchaseRegion: index % 4 === 0 ? "印尼" : "国内",
+  updatedBy: index % 3 === 0 ? "王采购" : "商品中心同步任务",
+  declarationInfo: index % 3 === 2 ? undefined : {
+    chineseClearanceName: material.materialName,
+    englishClearanceName: `${material.materialCategory} material`,
+    materialEnglish: material.composition || material.materialCategory,
+    usageEnglish: material.materialPurpose || "production",
+    weavingMethod: material.materialCategory === "面料" ? "knitted" : "",
+    brandType: "无品牌",
+    productMaterial: material.composition || material.materialCategory,
+    productUsage: material.materialPurpose,
+    productModel: material.specification,
+    specialAttributes: material.materialCategory === "面料" || material.materialCategory === "纱线" ? ["普货", "纺织品"] : ["普货"],
+  },
+  customsInfo: index % 4 === 3 ? undefined : {
+    chineseCustomsName: material.materialName,
+    englishCustomsName: `${material.materialCategory} material`,
+    originCountryOrRegion: "中国 / CN",
+    domesticSourcePlace: index % 2 === 0 ? "广东广州" : "浙江绍兴",
+    taxExemptionType: "照章征税",
+    customsMaterial: material.composition || material.materialCategory,
+    customsUsage: material.materialPurpose,
+    customsSpecificationModel: material.specification,
+    needCustomsDeclaration: true,
+    transactionUnit: material.purchaseUnit,
+  },
+  systemInfo: {
+    dataSource: "商品中心同步",
+    sourceSystem: "PCS",
+    sourceProductCode: `PCS-MAT-2026-${String(index + 1).padStart(4, "0")}`,
+    syncedAt: `2026-06-${String(12 - (index % 5)).padStart(2, "0")} 10:30:00`,
+    createdBy: material.createdBy,
+    createdAt: material.createdAt,
+    updatedBy: index % 3 === 0 ? "王采购" : "商品中心同步任务",
+    updatedAt: material.updatedAt,
+  },
+}));

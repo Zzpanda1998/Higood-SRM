@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import DataTable from "../../components/common/DataTable";
 import DesignLogicCard from "../../components/common/DesignLogicCard";
 import DetailModal from "../../components/common/DetailModal";
+import { FormGrid, ReadOnlyField, SectionCard } from "../../components/common/ModalSections";
 import PageHeader from "../../components/common/PageHeader";
 import SearchBar from "../../components/common/SearchBar";
 import StatusBadge from "../../components/common/StatusBadge";
@@ -27,6 +28,7 @@ export default function PmsListPage({
   detailItemColumns,
   primaryActionText = "新增",
   onPrimaryAction,
+  readOnly = false,
 }: {
   title: string;
   desc: string;
@@ -37,6 +39,7 @@ export default function PmsListPage({
   detailItemColumns?: PmsColumn[];
   primaryActionText?: string;
   onPrimaryAction?: () => void;
+  readOnly?: boolean;
 }) {
   const [keyword, setKeyword] = useState("");
   const [detail, setDetail] = useState<Record<string, any> | null>(null);
@@ -78,9 +81,11 @@ export default function PmsListPage({
           <button className="text-brand" onClick={() => setDetail(row)}>
             查看
           </button>
-          <button className="text-brand" onClick={() => showToast("MVP版本已预留编辑入口")}>
-            编辑
-          </button>
+          {!readOnly && (
+            <button className="text-brand" onClick={() => showToast("MVP版本已预留编辑入口")}>
+              编辑
+            </button>
+          )}
         </div>
       ),
     },
@@ -103,12 +108,14 @@ export default function PmsListPage({
           <button className="h-8 rounded border px-3 text-sm" onClick={() => setKeyword("")}>
             清除
           </button>
-          <button
-            className="ml-auto h-8 rounded bg-brand px-3 text-sm text-white"
-            onClick={onPrimaryAction ?? (() => showToast(`${primaryActionText}入口已预留`))}
-          >
-            {primaryActionText}
-          </button>
+          {!readOnly && (
+            <button
+              className="ml-auto h-8 rounded bg-brand px-3 text-sm text-white"
+              onClick={onPrimaryAction ?? (() => showToast(`${primaryActionText}入口已预留`))}
+            >
+              {primaryActionText}
+            </button>
+          )}
         </div>
       </SearchBar>
 
@@ -134,19 +141,25 @@ export default function PmsListPage({
             rows: [
               ["查询", "查询区", "按关键词过滤列表", "否"],
               ["清除", "查询区", "清空关键词并恢复列表", "否"],
-              [primaryActionText, "查询区右侧", "MVP版本预留创建入口", "否"],
               ["查看", "表格操作列", "打开详情弹窗", "否"],
-              ["编辑", "表格操作列", "预留编辑入口并提示", "否"],
+              ...(readOnly
+                ? [["新增 / 编辑", "页面全部区域", "不提供操作入口，数据仅供查看", "否"]]
+                : [
+                    [primaryActionText, "查询区右侧", "MVP版本预留创建入口", "否"],
+                    ["编辑", "表格操作列", "预留编辑入口并提示", "否"],
+                  ]),
             ],
           },
           {
             title: "状态流转规则",
             headers: ["当前状态", "触发动作", "目标状态", "说明"],
-            rows: logic.transitions ?? [
+            rows: logic.transitions ?? (readOnly ? [
+              ["任意状态", "查看", "状态不变", "PMS 只读取和展示来源系统数据"],
+            ] : [
               ["草稿", "提交", "待确认", "进入后续业务协同"],
               ["待确认", "确认", "已确认", "业务信息已确认"],
               ["已确认", "下推", "已生成", "生成后续业务单据"],
-            ],
+            ]),
           },
           {
             title: "查询筛选规则",
@@ -160,7 +173,7 @@ export default function PmsListPage({
               ["查询结果为空", "表格展示空状态"],
               ["字段较多", "允许横向滚动"],
               ["详情无明细", "只展示主表字段"],
-              ["MVP操作", "只做前端提示，不写入后端"],
+              [readOnly ? "只读页面" : "MVP操作", readOnly ? "不提供新增、编辑或明细修改入口" : "只做前端提示，不写入后端"],
             ],
           },
           {
@@ -179,25 +192,27 @@ export default function PmsListPage({
       <DetailModal open={!!detail} title={`${title}详情`} onClose={() => setDetail(null)}>
         {detail && (
           <div className="space-y-4 text-sm">
-            <div className="grid grid-cols-2 gap-3">
-              {Object.entries(detail)
-                .filter(([key]) => key !== detailItemsKey)
-                .map(([key, value]) => (
-                  <div key={key} className="min-w-0">
-                    <span className="text-gray-500">{key}：</span>
-                    <span className="break-all text-gray-800">{String(value ?? "-")}</span>
-                  </div>
-                ))}
-            </div>
+            <SectionCard title="一、基础信息" description={`查看${title}的基础资料与当前状态`}>
+              <FormGrid>
+                {Object.entries(detail)
+                  .filter(([key]) => key !== detailItemsKey)
+                  .map(([key, value]) => {
+                    const column = columns.find((item) => item.key === key);
+                    return <ReadOnlyField key={key} label={column?.title ?? key} value={String(value ?? "-")} />;
+                  })}
+              </FormGrid>
+            </SectionCard>
             {Array.isArray(detailItems) && detailItemColumns && (
-              <DataTable
-                columns={detailItemColumns.map((column) => ({
-                  key: column.key,
-                  title: column.title,
-                  render: (row: Record<string, any>) => String(row[column.key] ?? "-"),
-                }))}
-                rows={detailItems}
-              />
+              <SectionCard title="二、明细信息" description="只读展示关联结构与明细数据">
+                <DataTable
+                  columns={detailItemColumns.map((column) => ({
+                    key: column.key,
+                    title: column.title,
+                    render: (row: Record<string, any>) => String(row[column.key] ?? "-"),
+                  }))}
+                  rows={detailItems}
+                />
+              </SectionCard>
             )}
           </div>
         )}

@@ -151,14 +151,19 @@ export default function JoinHeadLogisticsModal({
 
   return (
     <div className="fixed inset-0 z-[75] flex items-center justify-center bg-black/30 p-3">
-      <div className="flex max-h-[calc(100vh-24px)] w-[1180px] flex-col overflow-hidden rounded-sm bg-white shadow-xl">
-        <div className="flex h-11 shrink-0 items-center justify-between border-b px-4">
-          <div className="text-sm font-semibold text-gray-800">加入头程物流单</div>
-          <button className="text-sm text-gray-500" onClick={close} aria-label="关闭加入头程物流单">X</button>
+      <div className="flex max-h-[85vh] w-[min(1240px,calc(100vw-24px))] flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-2xl">
+        <div className="flex shrink-0 items-center justify-between border-b border-gray-200 px-5 py-4">
+          <div>
+            <div className="text-base font-semibold text-gray-900">加入头程物流单</div>
+            <div className="mt-1 text-xs text-gray-500">选择头程物流单并分配本次加入的物料数量与卷数</div>
+          </div>
+          <button className="rounded-md px-3 py-1.5 text-sm text-gray-500 hover:bg-gray-100" onClick={close} aria-label="关闭加入头程物流单">关闭</button>
         </div>
 
-        <div className="overflow-y-auto px-4 py-3">
-          <div className="mb-3 flex min-h-9 items-start border border-gray-200 bg-gray-50 px-3 py-2 text-xs">
+        <div className="flex-1 space-y-4 overflow-y-auto bg-slate-50 p-5">
+          <section className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+            <div className="mb-3 border-l-4 border-brand pl-3 text-sm font-semibold text-gray-900">一、头程单信息</div>
+            <div className="flex min-h-9 items-start rounded-md bg-gray-50 px-3 py-2 text-xs">
             <div className="flex items-center">
               <span className="mr-1 text-red-500">*</span>
               <span className="mr-2 w-24 text-right">头程物流单号</span>
@@ -174,9 +179,12 @@ export default function JoinHeadLogisticsModal({
                 {headLogisticsNoError && <div className="mt-1 text-red-500">{headLogisticsNoError}</div>}
               </div>
             </div>
-          </div>
+            </div>
+          </section>
 
-          <div className="overflow-x-auto border border-gray-200">
+          <section className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+            <div className="mb-3 border-l-4 border-brand pl-3 text-sm font-semibold text-gray-900">二、物料分配明细</div>
+            <div className="overflow-x-auto border border-gray-200">
             <table className="min-w-[1120px] table-fixed text-left text-xs text-gray-800">
               <colgroup>{[145, 165, 170, 95, 95, 95, 95, 95, 105, 95].map((width, index) => <col key={index} style={{ width }} />)}</colgroup>
               <thead className="bg-gray-50">
@@ -213,18 +221,19 @@ export default function JoinHeadLogisticsModal({
                 })}
               </tbody>
             </table>
-          </div>
+            </div>
 
-          <div className="mt-2 flex justify-end gap-8 border border-gray-200 bg-gray-50 px-4 py-2 text-xs">
+            <div className="mt-2 flex justify-end gap-8 border border-gray-200 bg-gray-50 px-4 py-2 text-xs">
             <span>物流票数：<strong>{records.length}</strong></span>
             <span>头程数量合计：<strong>{qty(totalQuantity)}</strong></span>
             <span>头程卷数合计：<strong>{qty(totalRolls)}</strong></span>
-          </div>
+            </div>
+          </section>
         </div>
 
-        <div className="flex shrink-0 justify-between border-t px-4 py-2">
-          <button className="h-8 rounded-sm bg-[#009688] px-4 text-sm text-white" onClick={submit}>立即提交</button>
-          <button className="h-8 rounded-sm border border-gray-300 px-4 text-sm text-gray-700" onClick={close}>关闭</button>
+        <div className="flex shrink-0 justify-end gap-3 border-t border-gray-200 bg-white px-5 py-3">
+          <button className="h-9 rounded-md border border-gray-300 px-4 text-sm text-gray-700 hover:bg-gray-50" onClick={close}>取消</button>
+          <button className="h-9 rounded-md bg-brand px-5 text-sm font-medium text-white" onClick={submit}>立即提交</button>
         </div>
       </div>
     </div>

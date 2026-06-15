@@ -1,12 +1,15 @@
 import { Fragment, useMemo, useState, type ReactNode } from "react";
-import DataTable from "../../components/common/DataTable";
 import DesignLogicCard from "../../components/common/DesignLogicCard";
 import DetailModal from "../../components/common/DetailModal";
 import PageHeader from "../../components/common/PageHeader";
 import SearchBar from "../../components/common/SearchBar";
 import Toast from "../../components/common/Toast";
 import type { Dispatch, SetStateAction } from "react";
-import type { ProductPurchaseSuggestion as Suggestion } from "../../mock/productPurchaseSuggestions";
+import {
+  getPurchasingQtyBreakdown,
+  type ProductPurchaseSuggestion as Suggestion,
+  type ProductPurchaseSuggestionSku,
+} from "../../mock/productPurchaseSuggestions";
 import {
   productCatalogSpus,
   productPurchaseOrders,
@@ -74,7 +77,7 @@ function currentDateTime() {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")} ${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
 }
 
-function Drawer({
+function PurchaseOrderModal({
   open,
   title,
   onClose,
@@ -87,11 +90,11 @@ function Drawer({
 }) {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 bg-black/30" onMouseDown={onClose}>
-      <div className="ml-auto flex h-full w-[min(1040px,96vw)] flex-col bg-white shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
-        <div className="flex h-14 shrink-0 items-center justify-between border-b px-5">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-[1px]">
+      <div className="flex max-h-[85vh] w-[min(1180px,calc(100vw-32px))] flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-2xl">
+        <div className="flex h-14 shrink-0 items-center justify-between border-b border-gray-200 px-5">
           <h2 className="text-base font-semibold text-gray-900">{title}</h2>
-          <button className="flex h-8 w-8 items-center justify-center rounded text-xl text-gray-500 hover:bg-gray-100" onClick={onClose} aria-label="关闭">×</button>
+          <button className="rounded-md px-3 py-1.5 text-sm text-gray-500 transition hover:bg-gray-100 hover:text-gray-800" onClick={onClose} aria-label="关闭">关闭</button>
         </div>
         {children}
       </div>
@@ -120,6 +123,71 @@ function ProductImage({ imageUrl, name, size = "sm" }: { imageUrl?: string; name
   return <img src={imageUrl} alt={name} className={`${dimension} shrink-0 rounded-md border border-gray-200 object-cover`} />;
 }
 
+function getSkuPurchasingQuantities(item: ProductPurchaseSuggestionSku) {
+  if (item.skuPurchaseOrderQty !== undefined && item.skuHeadLogisticsQty !== undefined) {
+    return {
+      purchaseOrderQty: item.skuPurchaseOrderQty,
+      headLogisticsQty: item.skuHeadLogisticsQty,
+    };
+  }
+  return getPurchasingQtyBreakdown(item.purchasingQty, item.transitQty);
+}
+
+function SkuSuggestionTable({
+  items,
+  fallbackImage,
+  productName,
+}: {
+  items: ProductPurchaseSuggestionSku[];
+  fallbackImage?: string;
+  productName: string;
+}) {
+  const headerClass = "border-b border-r border-gray-200 px-3 py-2 text-center font-medium text-gray-700 last:border-r-0";
+  const cellClass = "border-r border-gray-100 px-3 py-2.5 text-center last:border-r-0";
+  return (
+    <div className="overflow-x-auto rounded border border-gray-200 bg-white">
+      <table className="min-w-[1500px] text-left text-[13px]">
+        <thead className="bg-gray-50">
+          <tr>
+            {["商品图片", "SKU", "商品名称", "颜色", "尺码", "COD与非COD已支付件数", "待发货数量", "KOL申请数量", "实时库存数量"].map((header) => (
+              <th key={header} rowSpan={2} className={headerClass}>{header}</th>
+            ))}
+            <th colSpan={2} className={`${headerClass} bg-blue-50 text-brand`}>采购中数量</th>
+            <th rowSpan={2} className={headerClass}>SKU折前需求缺口</th>
+            <th rowSpan={2} className={headerClass}>SKU折后建议采购</th>
+          </tr>
+          <tr>
+            <th className={`${headerClass} min-w-32 bg-blue-50/70`}>采购下单中数量</th>
+            <th className={`${headerClass} min-w-40 bg-blue-50/70`}>采购头程运输中数量</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((item) => {
+            const purchasingQuantities = getSkuPurchasingQuantities(item);
+            return (
+              <tr key={item.sku} className="border-b border-gray-100 last:border-b-0 hover:bg-gray-50">
+                <td className={cellClass}><ProductImage imageUrl={item.imageUrl ?? fallbackImage} name={productName} /></td>
+                <td className={`${cellClass} whitespace-nowrap font-medium text-gray-800`}>{item.sku}</td>
+                <td className={cellClass}>{item.productName ?? productName}</td>
+                <td className={cellClass}>{item.color}</td>
+                <td className={cellClass}>{item.size}</td>
+                <td className={cellClass}>{Math.trunc(item.paidQty ?? 0)}</td>
+                <td className={cellClass}>{Math.trunc(item.pendingDeliveryQty ?? 0)}</td>
+                <td className={cellClass}>{Math.trunc(item.kolApplicationQty ?? 0)}</td>
+                <td className={cellClass}>{Math.trunc(item.realTimeStockQty ?? item.stockQty ?? 0)}</td>
+                <td className={`${cellClass} bg-blue-50/20`}>{Math.trunc(purchasingQuantities.purchaseOrderQty ?? 0)}</td>
+                <td className={`${cellClass} bg-blue-50/20`}>{Math.trunc(purchasingQuantities.headLogisticsQty ?? 0)}</td>
+                <td className={cellClass}>{Math.trunc(item.rawGapQty ?? 0)}</td>
+                <td className={`${cellClass} font-semibold text-red-600`}>{Math.trunc(item.suggestedQty ?? 0)}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export default function ProductPurchaseSuggestion({
   rows,
   setRows,
@@ -134,6 +202,11 @@ export default function ProductPurchaseSuggestion({
   const [generateTarget, setGenerateTarget] = useState<Suggestion | null>(null);
   const [generateForm, setGenerateForm] = useState<GenerateForm | null>(null);
   const [toast, setToast] = useState("");
+  const closeGenerateForm = () => {
+    if (!window.confirm("当前内容未保存，确认关闭吗？")) return;
+    setGenerateTarget(null);
+    setGenerateForm(null);
+  };
 
   const filteredRows = useMemo(() => {
     return rows.filter((row) => {
@@ -438,12 +511,20 @@ export default function ProductPurchaseSuggestion({
       </div>
 
       <div className="overflow-x-auto rounded border border-gray-200 bg-white">
-        <table className="min-w-[1460px] text-left text-[13px]">
+        <table className="min-w-[1620px] text-left text-[13px]">
           <thead className="bg-gray-50">
             <tr>
-              {["", "商品图片", "SPU / 款号", "商品名称", "SKU数量", "COD与非COD已支付件数", "SPU待发货数量", "SPU KOL申请数量", "SPU实时库存总数", "SPU采购中总数", "SPU折前需求缺口", "SPU折后建议采购", "更新时间", "操作"].map((header) => (
-                <th key={header} className="border-b border-gray-200 px-3 py-2.5 font-medium text-gray-700">{header}</th>
+              {["", "商品图片", "SPU / 款号", "商品名称", "SKU数量", "COD与非COD已支付件数", "SPU待发货数量", "SPU KOL申请数量", "SPU实时库存总数"].map((header) => (
+                <th key={header} rowSpan={2} className="border-b border-r border-gray-200 px-3 py-2.5 text-center font-medium text-gray-700 last:border-r-0">{header}</th>
               ))}
+              <th colSpan={2} className="border-b border-r border-gray-200 bg-blue-50 px-3 py-2.5 text-center font-medium text-brand">采购中数量</th>
+              {["SPU折前需求缺口", "SPU折后建议采购", "更新时间", "操作"].map((header) => (
+                <th key={header} rowSpan={2} className="border-b border-r border-gray-200 px-3 py-2.5 text-center font-medium text-gray-700 last:border-r-0">{header}</th>
+              ))}
+            </tr>
+            <tr>
+              <th className="min-w-32 border-b border-r border-gray-200 bg-blue-50/70 px-3 py-2 text-center font-medium text-gray-700">采购下单中数量</th>
+              <th className="min-w-40 border-b border-r border-gray-200 bg-blue-50/70 px-3 py-2 text-center font-medium text-gray-700">采购头程运输中数量</th>
             </tr>
           </thead>
           <tbody>
@@ -459,7 +540,8 @@ export default function ProductPurchaseSuggestion({
                   <td className="px-3 py-2.5">{row.pendingDeliveryQty}</td>
                   <td className="px-3 py-2.5">{row.skuItems.reduce((sum, item) => sum + (item.kolApplicationQty ?? 0), 0)}</td>
                   <td className="px-3 py-2.5">{row.stockQty}</td>
-                  <td className="px-3 py-2.5">{row.purchasingQty}</td>
+                  <td className="bg-blue-50/20 px-3 py-2.5 text-center">{Math.trunc(row.spuPurchaseOrderQty ?? 0)}</td>
+                  <td className="bg-blue-50/20 px-3 py-2.5 text-center">{Math.trunc(row.spuHeadLogisticsQty ?? 0)}</td>
                   <td className="px-3 py-2.5">{row.rawGapQty ?? 0}</td>
                   <td className="px-3 py-2.5 font-semibold text-red-600">{row.suggestedQty}</td>
                   <td className="whitespace-nowrap px-3 py-2.5 text-gray-600">{row.updatedAt || "-"}</td>
@@ -476,35 +558,22 @@ export default function ProductPurchaseSuggestion({
                 </tr>
                 {expanded.includes(row.id) && (
                   <tr className="border-b border-gray-100 bg-blue-50/40">
-                    <td colSpan={14} className="px-12 py-3">
-                      <DataTable columns={[
-                        { key: "image", title: "商品图片", render: (item) => <ProductImage imageUrl={item.imageUrl ?? row.imageUrl} name={row.productName} /> },
-                        { key: "sku", title: "SKU" },
-                        { key: "productName", title: "商品名称" },
-                        { key: "color", title: "颜色" },
-                        { key: "size", title: "尺码" },
-                        { key: "paidQty", title: "COD与非COD已支付件数" },
-                        { key: "pendingDeliveryQty", title: "待发货数量" },
-                        { key: "kolApplicationQty", title: "KOL申请数量" },
-                        { key: "realTimeStockQty", title: "实时库存数量" },
-                        { key: "purchasingQty", title: "采购中数量" },
-                        { key: "rawGapQty", title: "SKU折前需求缺口" },
-                        { key: "suggestedQty", title: "SKU折后建议采购" },
-                      ]} rows={row.skuItems} />
+                    <td colSpan={15} className="px-12 py-3">
+                      <SkuSuggestionTable items={row.skuItems} fallbackImage={row.imageUrl} productName={row.productName} />
                     </td>
                   </tr>
                 )}
               </Fragment>
             ))}
-            {filteredRows.length === 0 && <tr><td colSpan={14} className="p-8 text-center text-gray-400">暂无数据</td></tr>}
+            {filteredRows.length === 0 && <tr><td colSpan={15} className="p-8 text-center text-gray-400">暂无数据</td></tr>}
           </tbody>
         </table>
       </div>
 
       <DesignLogicCard sections={[
-        { title: "页面定位", headers: ["项目", "说明"], rows: [["页面名称", "商品采购建议"], ["所属模块", "采购建议"], ["计算维度", "采购建议必须按SKU计算，SPU仅做SKU汇总展示"], ["上游来源", "待发货数量、KOL申请数量、采购中数量、实时库存数量"], ["下游去向", "商品采购单"]] },
-        { title: "核心业务规则", headers: ["业务场景", "核心规则", "结果"], rows: [["SKU折前需求缺口", "skuRawGapQty = Math.max(0, 待发货数量 + KOL申请数量 - 采购中数量 - 实时库存数量)", "展示未乘0.7前的缺口"], ["SKU折后建议采购", "skuSuggestedPurchaseQty = Math.ceil(skuRawGapQty × 0.7)", "作为默认生成商品采购单数量"], ["SPU折前汇总", "SPU折前需求缺口 = 所属SKU折前需求缺口之和", "仅汇总，不直接计算SPU缺口"], ["SPU折后汇总", "SPU折后建议采购 = 所属SKU折后建议采购之和", "作为SPU层级展示值"], ["更新时间", "采购建议重新计算、KOL数量变化或人工操作成功时更新updatedAt", "格式YYYY-MM-DD HH:mm，空值显示-"], ["是否需要做货", "needProduction 为 false 时保留SPU数据，但排除在需要做货范围外", "不默认生成商品采购单，可随时恢复"], ["支付件数", "COD与非COD已支付件数 = COD已支付件数 + 非COD已支付件数", "SKU展示合计，SPU汇总所属SKU合计"], ["主列表精简", "不展示转运中、瑕疵品、最后入库、最后出库和状态", "保留采购建议核心字段"]] },
-        { title: "按钮交互规则", headers: ["按钮", "出现位置", "点击后动作", "是否改变数据"], rows: [["查询", "查询区", "按筛选条件刷新列表", "否"], ["清除", "查询区", "清空筛选条件", "否"], ["导出SKU商品", "查询区", "展示预留提示", "否"], ["导出SPU商品", "查询区", "展示预留提示", "否"], ["查看SKU", "表格操作列", "展开SKU明细", "否"], ["设置不需要做货", "SPU操作列", "将needProduction设为false并更新updatedAt", "是"], ["恢复需要做货", "SPU操作列", "将needProduction设为true并更新updatedAt", "是"], ["生成采购单", "查询区/操作列", "仅needProduction为true时打开生成商品采购单抽屉", "否"], ["确认生成", "抽屉底部", "生成商品采购单、回写关联单号并更新updatedAt", "是"]] },
+        { title: "页面定位", headers: ["项目", "说明"], rows: [["页面名称", "商品采购建议"], ["所属模块", "采购建议"], ["计算维度", "采购建议必须按SKU计算，SPU仅做SKU汇总展示"], ["上游来源", "待发货数量、KOL申请数量、采购下单中数量、采购头程运输中数量、实时库存数量"], ["下游去向", "商品采购单"]] },
+        { title: "核心业务规则", headers: ["业务场景", "核心规则", "结果"], rows: [["采购中数量拆分", "总采购中数量 = 采购下单中数量 + 采购头程运输中数量；两部分互斥", "主表与SKU表按二级表头分别展示"], ["SKU折前需求缺口", "skuRawGapQty = Math.max(0, 待发货数量 + KOL申请数量 - 总采购中数量 - 实时库存数量)", "展示未乘0.7前的缺口"], ["SKU折后建议采购", "skuSuggestedPurchaseQty = Math.ceil(skuRawGapQty × 0.7)", "作为默认生成商品采购单数量"], ["SPU折前汇总", "SPU折前需求缺口 = 所属SKU折前需求缺口之和", "仅汇总，不直接计算SPU缺口"], ["SPU折后汇总", "SPU折后建议采购 = 所属SKU折后建议采购之和", "作为SPU层级展示值"], ["更新时间", "采购建议重新计算、KOL数量变化或人工操作成功时更新updatedAt", "格式YYYY-MM-DD HH:mm，空值显示-"], ["是否需要做货", "needProduction 为 false 时保留SPU数据，但排除在需要做货范围外", "不默认生成商品采购单，可随时恢复"], ["支付件数", "COD与非COD已支付件数 = COD已支付件数 + 非COD已支付件数", "SKU展示合计，SPU汇总所属SKU合计"], ["主列表精简", "不展示转运中、瑕疵品、最后入库、最后出库和状态", "保留采购建议核心字段"]] },
+        { title: "按钮交互规则", headers: ["按钮", "出现位置", "点击后动作", "是否改变数据"], rows: [["查询", "查询区", "按筛选条件刷新列表", "否"], ["清除", "查询区", "清空筛选条件，恢复全部列表", "否"], ["导出SKU商品", "查询区", "展示预留提示", "否"], ["导出SPU商品", "查询区", "展示预留提示", "否"], ["查看SKU", "表格操作列", "展开SKU明细", "否"], ["设置不需要做货", "SPU操作列", "将needProduction设为false并更新updatedAt", "是"], ["恢复需要做货", "SPU操作列", "将needProduction设为true并更新updatedAt", "是"], ["生成采购单", "查询区/操作列", "仅needProduction为true时打开生成商品采购单弹窗", "否"], ["确认生成", "弹窗底部", "生成商品采购单、回写关联单号并更新updatedAt", "是"]] },
         { title: "生成商品采购单规则", headers: ["场景", "处理规则", "数据结果"], rows: [["默认带入", "供应商取商品默认供应商，区域默认ID，区域价格默认0，采购专员默认当前用户，仓库默认印尼可用采购仓", "减少重复录入"], ["采购类型", "Radio非必填，默认不选；可选爆款（70%）或热销（60%）", "不选择也允许生成采购单"], ["建议采购数量", "SKU折后建议采购始终读取商品采购建议已计算结果并保持只读", "切换采购类型时不变化"], ["本次采购数量", "未选类型时等于SKU折后建议采购；爆款按×0.7、热销按×0.6并向上取整", "用户可手动修改；切换类型时按所选系数刷新"], ["重置采购类型", "清空采购类型，并将本次采购数量恢复为SKU折后建议采购", "不影响建议采购数量、价格和其他输入"], ["SKU金额", "金额=本次采购数量×价格", "随数量和价格实时更新"], ["数据带入", "带入SPU、商品、供应商、仓库、区域、可选采购类型、价格、金额、采购备注及所选SKU明细", "商品采购单数据源新增待采购订单"]] },
         { title: "状态流转规则", headers: ["当前状态", "触发动作", "目标状态", "说明"], rows: [["待生成", "确认生成商品采购单", "已生成", "生成GP编号"], ["无需采购", "建议数量小于等于0", "无需采购", "不建议生成采购单"], ["异常", "数据缺失或计算异常", "异常", "进入人工处理"]] },
         { title: "查询筛选规则", headers: ["筛选项", "匹配字段", "匹配方式", "说明"], rows: [["区域", "area", "精确匹配", "全部区域不参与筛选"], ["采购类型", "purchaseType", "精确匹配", "做货/成衣/样衣"], ["是否做货", "needProduction", "布尔匹配", "是仅显示需要做货，否仅显示不需要做货"], ["主SKU", "mainSku", "模糊匹配", "支持输入部分SKU"], ["关键词", "SPU、SKU、商品名称", "模糊匹配", "覆盖主表和SKU明细"], ["折后建议采购数量", "suggestedQty", "区间匹配", "不提供状态及入出库时间筛选"]] },
@@ -528,25 +597,12 @@ export default function ProductPurchaseSuggestion({
                 <div><span className="text-gray-500">商品备注：</span>{detail.productRemark || "-"}</div>
               </div>
             </div>
-            <DataTable columns={[
-              { key: "image", title: "商品图片", render: (item) => <ProductImage imageUrl={item.imageUrl ?? detail.imageUrl} name={detail.productName} /> },
-              { key: "sku", title: "SKU" },
-              { key: "productName", title: "商品名称" },
-              { key: "color", title: "颜色" },
-              { key: "size", title: "尺码" },
-              { key: "paidQty", title: "COD与非COD已支付件数" },
-              { key: "pendingDeliveryQty", title: "待发货数量" },
-              { key: "kolApplicationQty", title: "KOL申请数量" },
-              { key: "realTimeStockQty", title: "实时库存数量" },
-              { key: "purchasingQty", title: "采购中数量" },
-              { key: "rawGapQty", title: "SKU折前需求缺口" },
-              { key: "suggestedQty", title: "SKU折后建议采购" },
-            ]} rows={detail.skuItems} />
+            <SkuSuggestionTable items={detail.skuItems} fallbackImage={detail.imageUrl} productName={detail.productName} />
           </div>
         )}
       </DetailModal>
 
-      <Drawer open={!!generateTarget && !!generateForm} title="生成商品采购单" onClose={() => { setGenerateTarget(null); setGenerateForm(null); }}>
+      <PurchaseOrderModal open={!!generateTarget && !!generateForm} title="生成商品采购单" onClose={closeGenerateForm}>
         {generateTarget && generateForm && (() => {
           const catalog = productCatalogSpus.find((item) => item.spu === generateTarget.spu);
           const selectedDrafts = generateForm.skuDrafts.filter((item) => item.selected);
@@ -707,14 +763,14 @@ export default function ProductPurchaseSuggestion({
               <div className="flex h-16 shrink-0 items-center justify-between border-t bg-white px-5">
                 <div className="text-sm text-gray-600">已选 <span className="font-semibold text-gray-900">{selectedDrafts.length}</span> 个 SKU，采购合计 <span className="font-semibold text-red-600">{selectedPurchaseQty}</span></div>
                 <div className="flex gap-2">
-                  <button className="h-9 rounded border px-4" onClick={() => { setGenerateTarget(null); setGenerateForm(null); }}>取消</button>
+                  <button className="h-9 rounded border px-4" onClick={closeGenerateForm}>取消</button>
                   <button className="h-9 rounded bg-brand px-4 text-white" onClick={confirmGenerate}>确认生成商品采购单</button>
                 </div>
               </div>
             </>
           );
         })()}
-      </Drawer>
+      </PurchaseOrderModal>
       <Toast msg={toast} />
     </div>
   );

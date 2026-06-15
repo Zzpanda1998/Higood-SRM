@@ -156,19 +156,29 @@ export default function CreateTransferBatchModal({
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/30 p-3">
-      <div className="flex max-h-[calc(100vh-24px)] w-[760px] flex-col overflow-hidden rounded-sm bg-white shadow-xl">
-        <div className="flex h-11 shrink-0 items-center justify-between border-b px-4">
-          <div className="text-sm font-semibold text-gray-800">创建头程物流</div>
-          <button className="text-sm leading-none text-gray-500" onClick={close} aria-label="关闭创建头程物流">X</button>
+      <div className="flex max-h-[85vh] w-[min(920px,calc(100vw-24px))] flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-2xl">
+        <div className="flex shrink-0 items-center justify-between border-b border-gray-200 px-5 py-4">
+          <div>
+            <div className="text-base font-semibold text-gray-900">创建头程物流</div>
+            <div className="mt-1 text-xs text-gray-500">维护运输批次、费用、交付状态与预计到达信息</div>
+          </div>
+          <button className="rounded-md px-3 py-1.5 text-sm text-gray-500 hover:bg-gray-100" onClick={close} aria-label="关闭创建头程物流">关闭</button>
         </div>
-        <div className="overflow-y-auto px-5 py-3">
-          <div className="space-y-1">
+        <div className="flex-1 space-y-4 overflow-y-auto bg-slate-50 p-5">
+          <section className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+            <SectionHeading title="一、基础信息" description="设置头程物流批次、线路、仓库及承运信息" />
+            <div className="space-y-2">
             <FieldRow label="货运批次" required error={errors.batchNo}><input className={inputClass} value={form.batchNo} onChange={(event) => update("batchNo", event.target.value)} /></FieldRow>
             <FieldRow label="货源地区" required error={errors.sourceRegion}><select className={inputClass} value={form.sourceRegion} onChange={(event) => update("sourceRegion", event.target.value)}><option>CN</option><option>ID</option><option>US</option></select></FieldRow>
             <FieldRow label="仓库" required error={errors.warehouse}><select className={inputClass} value={form.warehouse} onChange={(event) => update("warehouse", event.target.value)}><option value="">请选择仓库</option><option>印尼仓</option><option>广州主仓</option><option>深圳仓</option><option>面辅料仓</option><option>中转仓</option></select></FieldRow>
             <FieldRow label="货运类型" required error={errors.shippingType}><select className={inputClass} value={form.shippingType} onChange={(event) => update("shippingType", event.target.value)}><option value="">请选择货运类型</option><option>空运</option><option>海运</option><option>陆运</option><option>快递</option></select></FieldRow>
             <FieldRow label="区域" required error={errors.area}><select className={inputClass} value={form.area} onChange={(event) => update("area", event.target.value)}><option value="">请选择区域</option><option>ID</option><option>CN</option><option>CN =&gt; ID</option><option>US</option></select></FieldRow>
             <FieldRow label="货运公司"><input className={inputClass} value={form.logisticsCompany} placeholder="货运公司" onChange={(event) => update("logisticsCompany", event.target.value)} /></FieldRow>
+            </div>
+          </section>
+          <section className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+            <SectionHeading title="二、费用信息" description="按币种维护物流、税费、关税及清关费用" />
+            <div className="space-y-2">
             <FieldRow label="物流费用 / RMB" error={errors.logisticsFeeRmb}><input className={inputClass} value={form.logisticsFeeRmb} placeholder="物流费用" onChange={(event) => update("logisticsFeeRmb", event.target.value)} /></FieldRow>
             <FieldRow label="物流费用 / USD" error={errors.logisticsFeeUsd}><input className={inputClass} value={form.logisticsFeeUsd} placeholder="物流费用" onChange={(event) => update("logisticsFeeUsd", event.target.value)} /></FieldRow>
             <FieldRow label="所得税 / IDR" error={errors.incomeTaxIdr}><input className={inputClass} value={form.incomeTaxIdr} placeholder="所得税" onChange={(event) => update("incomeTaxIdr", event.target.value)} /></FieldRow>
@@ -176,6 +186,11 @@ export default function CreateTransferBatchModal({
             <FieldRow label="关税 / IDR" error={errors.customsDutyIdr}><input className={inputClass} value={form.customsDutyIdr} placeholder="关税" onChange={(event) => update("customsDutyIdr", event.target.value)} /></FieldRow>
             <FieldRow label="罚款 / IDR" error={errors.fineIdr}><input className={inputClass} value={form.fineIdr} placeholder="罚款" onChange={(event) => update("fineIdr", event.target.value)} /></FieldRow>
             <FieldRow label="清关费用 / IDR" error={errors.clearanceFeeIdr}><input className={inputClass} value={form.clearanceFeeIdr} placeholder="清关费用" onChange={(event) => update("clearanceFeeIdr", event.target.value)} /></FieldRow>
+            </div>
+          </section>
+          <section className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+            <SectionHeading title="三、交付与备注" description="维护当前交付状态、预计到达时间及补充说明" />
+            <div className="space-y-2">
             <FieldRow label="入库状态">
               <div className="flex h-8 items-center gap-5">
                 {(["待交货", "已交货", "已发货", "已入库"] as const).map((item) => <label key={item} className="flex items-center gap-1.5 text-sm"><input type="radio" name="create-batch-inbound-status" checked={form.inboundStatus === item} onChange={() => update("inboundStatus", item)} />{item}</label>)}
@@ -183,10 +198,25 @@ export default function CreateTransferBatchModal({
             </FieldRow>
             <FieldRow label="预计送达万隆时间"><input className={inputClass} type="datetime-local" value={form.expectedBandungArrivalTime} onChange={(event) => update("expectedBandungArrivalTime", event.target.value)} /></FieldRow>
             <FieldRow label="备注" top><textarea className="h-24 w-full resize-none rounded-sm border border-gray-300 px-2 py-1.5 text-sm outline-none focus:border-brand" value={form.remark} placeholder="请输入内容" onChange={(event) => update("remark", event.target.value)} /></FieldRow>
-          </div>
-          <div className="mt-3 pl-40"><button className="h-8 rounded-sm bg-[#009688] px-4 text-sm text-white" onClick={submit}>立即提交</button></div>
+            </div>
+          </section>
         </div>
-        <div className="flex shrink-0 justify-end border-t px-4 py-2"><button className="h-8 rounded-sm border border-gray-300 px-4 text-sm text-gray-700" onClick={close}>关闭</button></div>
+        <div className="flex shrink-0 justify-end gap-3 border-t border-gray-200 bg-white px-5 py-3">
+          <button className="h-9 rounded-md border border-gray-300 px-4 text-sm text-gray-700 hover:bg-gray-50" onClick={close}>取消</button>
+          <button className="h-9 rounded-md bg-brand px-5 text-sm font-medium text-white" onClick={submit}>立即提交</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SectionHeading({ title, description }: { title: string; description: string }) {
+  return (
+    <div className="mb-4 flex items-start gap-3 border-b border-gray-100 pb-3">
+      <span className="mt-0.5 h-5 w-1 rounded-full bg-brand" />
+      <div>
+        <div className="text-sm font-semibold text-gray-900">{title}</div>
+        <div className="mt-1 text-xs text-gray-500">{description}</div>
       </div>
     </div>
   );

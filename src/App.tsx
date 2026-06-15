@@ -25,12 +25,10 @@ import MaterialPurchaseTracking, { createMaterialLogisticsRows } from "./pages/m
 import type { JoinHeadLogisticsPayload } from "./pages/material-purchase/JoinHeadLogisticsModal";
 import TransferBatchManagement from "./pages/material-purchase/TransferBatchManagement";
 import { idMaterialPurchaseOrders } from "./mock/idMaterialPurchaseOrders";
-import ArrivalPlan from "./pages/warehouse/ArrivalPlan";
-import ReceiptManagement from "./pages/warehouse/ReceiptManagement";
-import InspectionManagement from "./pages/warehouse/InspectionManagement";
-import InboundManagement from "./pages/warehouse/InboundManagement";
 import ProductPurchaseReconciliation from "./pages/finance/ProductPurchaseReconciliation";
 import ProcurementReconciliation, { type ReconciliationView } from "./pages/finance/ProcurementReconciliation";
+import LogisticsFeeReconciliation from "./pages/finance/LogisticsFeeReconciliation";
+import MaterialPurchaseReconciliation from "./pages/finance/MaterialPurchaseReconciliation";
 import { initialOrders, initialPayables, initialPayments } from "./mock/reconciliation";
 import UserManagement from "./pages/settings/UserManagement";
 import RoleManagement from "./pages/settings/RoleManagement";
@@ -41,7 +39,8 @@ import type { TransferBatch } from "./types/transferBatch";
 const staticViews: Record<string, ReactElement> = {
   PMS首页: <Dashboard />,
   供应商管理: <SupplierManagement />,
-  物料管理: <MaterialManagement />,
+  面辅料列表: <MaterialManagement title="面辅料列表" description="查看商品中心 PCS 同步的面料、辅料、纱线、包材及耗材资料，并维护采购、申报和报关补充信息。" allowedCategories={["面料", "辅料", "纱线", "包材", "耗材"]} />,
+  "成衣 / 样衣列表": <MaterialManagement title="成衣 / 样衣列表" description="查看商品中心 PCS 同步的成衣与样衣资料，并维护采购、申报和报关补充信息。" allowedCategories={["成衣", "样衣"]} />,
   仓库管理: <WarehouseManagement />,
   单位管理: <UnitManagement />,
   "BOM/样板管理": <BomTemplateManagement />,
@@ -50,10 +49,6 @@ const staticViews: Record<string, ReactElement> = {
   成衣采购单: <GarmentPurchaseOrder />,
   样衣采购单: <SamplePurchaseOrder />,
   面辅料需求分析: <MaterialRequirementAnalysis />,
-  到货计划: <ArrivalPlan />,
-  收货结果: <ReceiptManagement />,
-  质检结果: <InspectionManagement />,
-  入库结果: <InboundManagement />,
   商品采购对账: <ProductPurchaseReconciliation />,
   用户管理: <UserManagement />,
   角色权限: <RoleManagement />,
@@ -80,6 +75,7 @@ export default function App() {
   const [materialOrders, setMaterialOrders] = useState(idMaterialPurchaseOrders);
   const [importedLogistics, setImportedLogistics] = useState<ImportedLogisticsInfo[]>([]);
   const [transferBatches, setTransferBatches] = useState<TransferBatch[]>([]);
+  const [targetFirstLegNo, setTargetFirstLegNo] = useState("");
   const [payables, setPayables] = useState(initialPayables);
   const [reconciliationOrders, setReconciliationOrders] = useState(initialOrders);
   const [paymentRecords, setPaymentRecords] = useState(initialPayments);
@@ -106,6 +102,11 @@ export default function App() {
   const closeTab = (key: string) => {
     setTabs((current) => current.filter((tab) => tab.key !== key));
     if (active === key) setActive("PMS首页");
+  };
+
+  const openFirstLegLogistics = (firstLegNo: string) => {
+    setTargetFirstLegNo(firstLegNo);
+    openMenu("头程物流");
   };
 
   const createTransferBatchFromLogistics = ({ headLogisticsNo, allocations }: JoinHeadLogisticsPayload) => {
@@ -168,7 +169,13 @@ export default function App() {
       return <MaterialPurchaseTracking onCreateTransferBatch={createTransferBatchFromLogistics} records={materialLogisticsRecords} transferBatches={transferBatches} />;
     }
     if (active === "头程物流") {
-      return <TransferBatchManagement batches={transferBatches} setBatches={setTransferBatches} availableRecords={materialLogisticsRecords} />;
+      return <TransferBatchManagement batches={transferBatches} setBatches={setTransferBatches} availableRecords={materialLogisticsRecords} targetBatchNo={targetFirstLegNo} onTargetHandled={() => setTargetFirstLegNo("")} />;
+    }
+    if (active === "物流费用对账") {
+      return <LogisticsFeeReconciliation onOpenFirstLeg={openFirstLegLogistics} />;
+    }
+    if (active === "面辅料采购对账") {
+      return <MaterialPurchaseReconciliation />;
     }
     if (reconciliationViews.has(active as ReconciliationView)) {
       return (
@@ -184,7 +191,7 @@ export default function App() {
       );
     }
     return staticViews[active] ?? <Dashboard />;
-  }, [active, importedLogistics, kolDemands, materialLogisticsRecords, materialOrders, paymentRecords, payables, reconciliationOrders, suggestions, transferBatches]);
+  }, [active, importedLogistics, kolDemands, materialLogisticsRecords, materialOrders, paymentRecords, payables, reconciliationOrders, suggestions, targetFirstLegNo, transferBatches]);
 
   return (
     <Layout role={role} setRole={setRole} activeMenu={active} onMenuClick={openMenu} tabs={tabs} onTabSwitch={switchTab} onTabClose={closeTab}>
