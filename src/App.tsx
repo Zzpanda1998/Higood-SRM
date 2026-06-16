@@ -4,6 +4,8 @@ import type { Role, TabItem } from "./types/common";
 import Dashboard from "./pages/dashboard/Dashboard";
 import SupplierManagement from "./pages/master-data/SupplierManagement";
 import MaterialManagement from "./pages/master-data/MaterialManagement";
+import ProductSkuListPage from "./pages/master-data/ProductSkuListPage";
+import SupplierSupplyArchiveDemo from "./pages/master-data/SupplierSupplyArchiveDemo";
 import WarehouseManagement from "./pages/master-data/WarehouseManagement";
 import UnitManagement from "./pages/master-data/UnitManagement";
 import BomTemplateManagement from "./pages/base-data/BomTemplateManagement";
@@ -41,9 +43,11 @@ import type { FirstLegCarrier, FirstLegCarrierChannel } from "./types/firstLegCa
 
 const staticViews: Record<string, ReactElement> = {
   PMS首页: <Dashboard />,
-  供应商管理: <SupplierManagement />,
+  供应商供货档案: <SupplierSupplyArchiveDemo />,
+  商品供应商管理: <SupplierManagement />,
   面辅料列表: <MaterialManagement title="面辅料列表" description="查看商品中心 PCS 同步的面料、辅料、纱线、包材及耗材资料，并维护采购、申报和报关补充信息。" allowedCategories={["面料", "辅料", "纱线", "包材", "耗材"]} />,
-  "成衣 / 样衣列表": <MaterialManagement title="成衣 / 样衣列表" description="查看商品中心 PCS 同步的成衣与样衣资料，并维护采购、申报和报关补充信息。" allowedCategories={["成衣", "样衣"]} />,
+  成衣列表: <ProductSkuListPage kind="garment" />,
+  样衣列表: <ProductSkuListPage kind="sample" />,
   仓库管理: <WarehouseManagement />,
   单位管理: <UnitManagement />,
   "BOM/样板管理": <BomTemplateManagement />,
@@ -60,7 +64,12 @@ const staticViews: Record<string, ReactElement> = {
 
 const reconciliationViews = new Set<ReconciliationView>(["应付明细池", "面辅料采购对账", "物流费用对账", "对账单管理", "付款记录"]);
 const dynamicViewKeys = new Set(["商品采购建议", "KOL采购需求", "面辅料采购单", "面辅料采购跟踪", "头程物流", "头程物流商管理", ...reconciliationViews]);
-const isAvailableView = (key: string) => key in staticViews || dynamicViewKeys.has(key);
+const normalizeViewKey = (key: string) => {
+  if (key === "供应商管理") return "商品供应商管理";
+  if (key === "成衣 / 样衣列表") return "成衣列表";
+  return key;
+};
+const isAvailableView = (key: string) => normalizeViewKey(key) in staticViews || dynamicViewKeys.has(normalizeViewKey(key));
 
 export default function App() {
   const [role, setRole] = useState<Role>("采购员");
@@ -87,21 +96,23 @@ export default function App() {
   const materialLogisticsRecords = useMemo(() => createMaterialLogisticsRows(materialOrders, importedLogistics), [importedLogistics, materialOrders]);
 
   const openMenu = (key: string) => {
-    if (!isAvailableView(key)) {
+    const viewKey = normalizeViewKey(key);
+    if (!isAvailableView(viewKey)) {
       setActive("PMS首页");
       return;
     }
-    setActive(key);
-    setTabs((current) => (current.some((tab) => tab.key === key) ? current : [...current, { key, title: key }]));
+    setActive(viewKey);
+    setTabs((current) => (current.some((tab) => tab.key === viewKey) ? current : [...current, { key: viewKey, title: viewKey }]));
   };
 
   const switchTab = (key: string) => {
-    if (!isAvailableView(key)) {
+    const viewKey = normalizeViewKey(key);
+    if (!isAvailableView(viewKey)) {
       setActive("PMS首页");
       setTabs((current) => current.filter((tab) => isAvailableView(tab.key)));
       return;
     }
-    setActive(key);
+    setActive(viewKey);
   };
 
   const closeTab = (key: string) => {

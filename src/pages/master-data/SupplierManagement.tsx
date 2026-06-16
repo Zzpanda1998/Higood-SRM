@@ -223,7 +223,7 @@ export default function SupplierManagement() {
 
   return (
     <div>
-      <PageHeader title="供应商管理" desc="用于维护面料、辅料、纱线、包材、样衣、成衣等采购供应商资料，并作为采购申请、采购订单和供应商协同的基础数据。" />
+      <PageHeader title="商品供应商管理" desc="用于维护面料、辅料、纱线、包材、样衣、成衣等商品采购供应商资料，并作为采购申请、采购订单和供应商协同的基础数据。" />
       <SearchBar>
         <div className="flex flex-wrap items-center gap-2">
           <input className="h-8 w-72 rounded border px-2 text-sm" value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="搜索供应商编码 / 名称 / 简称 / 联系人" />
@@ -252,7 +252,7 @@ export default function SupplierManagement() {
           title="一、页面定位"
           headers={["项目", "说明"]}
           rows={[
-            ["页面名称", "供应商管理"],
+            ["页面名称", "商品供应商管理"],
             ["所属模块", "基础资料"],
             ["页面目标", "维护 SRM 采购供应商主数据"],
             ["业务作用", "为采购申请、采购订单、供应商确认、供应商发货、采购对账提供供应商数据"],
