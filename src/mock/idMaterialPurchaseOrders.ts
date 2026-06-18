@@ -1,3 +1,6 @@
+import { logisticsSplitDemoByOrderNo } from "./logisticsSplitDemo";
+import type { DomesticLogisticsInfo, FirstLegLogisticsInfo } from "../types/logisticsSplit";
+
 export type IdMaterialPurchaseOrder = {
   idOrderNo: string;
   sourceAnalysisNo: string;
@@ -65,6 +68,8 @@ export type IdMaterialPurchaseOrder = {
   purchaseRemark?: string;
   qualityResult?: string;
   creator?: string;
+  domesticLogistics?: DomesticLogisticsInfo;
+  firstLegLogistics?: FirstLegLogisticsInfo;
 };
 
 const baseOrders: IdMaterialPurchaseOrder[] = [
@@ -143,5 +148,7 @@ export const idMaterialPurchaseOrders: IdMaterialPurchaseOrder[] = baseOrders.ma
     purchaseRemark: order.purchaseRemark ?? (index % 2 === 0 ? "按计划优先采购" : "-"),
     qualityResult: order.qualityResult ?? (inbound ? "合格" : "-"),
     creator: order.creator ?? order.buyer,
+    domesticLogistics: order.domesticLogistics ?? logisticsSplitDemoByOrderNo[order.idOrderNo]?.domesticLogistics,
+    firstLegLogistics: order.firstLegLogistics ?? logisticsSplitDemoByOrderNo[order.idOrderNo]?.firstLegLogistics,
   };
 });

@@ -181,11 +181,11 @@ export default function FirstLegCarrierManagement({
   const saveCarrier = () => {
     if (!validateCarrier()) return;
     if (carrierModal?.mode === "edit" && carrierModal.row) {
-      setCarriers((current) => current.map((row) => row.id === carrierModal.row?.id ? { ...row, ...carrierDraft, updatedBy: "当前用户", updatedAt: now() } : row));
+      setCarriers((current) => current.map((row) => row.id === carrierModal.row?.id ? { ...row, ...carrierDraft, updatedBy: "张三", updatedAt: now() } : row));
       setChannels((current) => current.map((row) => row.carrierId === carrierModal.row?.id ? { ...row, carrierName: carrierDraft.carrierName } : row));
       showToast("物流商信息已更新");
     } else {
-      const item: FirstLegCarrier = { ...carrierDraft, id: `flc-${Date.now()}`, channelCount: 0, status: carrierDraft.status || "启用", createdBy: "当前用户", createdAt: now() };
+      const item: FirstLegCarrier = { ...carrierDraft, id: `flc-${Date.now()}`, channelCount: 0, status: carrierDraft.status || "启用", createdBy: "张三", createdAt: now() };
       setCarriers((current) => [item, ...current]);
       showToast("头程物流商新增成功");
     }
@@ -207,10 +207,10 @@ export default function FirstLegCarrierManagement({
   const saveChannel = () => {
     if (!channelModal || !validateChannel()) return;
     if (channelModal.mode === "edit" && channelModal.row) {
-      setChannels((current) => current.map((row) => row.id === channelModal.row?.id ? { ...row, ...channelDraft, updatedBy: "当前用户", updatedAt: now() } : row));
+      setChannels((current) => current.map((row) => row.id === channelModal.row?.id ? { ...row, ...channelDraft, updatedBy: "张三", updatedAt: now() } : row));
       showToast("物流渠道已更新");
     } else {
-      const item: FirstLegCarrierChannel = { ...channelDraft, id: `flch-${Date.now()}`, carrierId: channelModal.carrier.id, carrierName: channelModal.carrier.carrierName, createdBy: "当前用户", createdAt: now() };
+      const item: FirstLegCarrierChannel = { ...channelDraft, id: `flch-${Date.now()}`, carrierId: channelModal.carrier.id, carrierName: channelModal.carrier.carrierName, createdBy: "张三", createdAt: now() };
       setChannels((current) => [item, ...current]);
       setCarriers((current) => current.map((row) => row.id === channelModal.carrier.id ? { ...row, channelCount: row.channelCount + 1 } : row));
       setSelectedCarrierId(channelModal.carrier.id);

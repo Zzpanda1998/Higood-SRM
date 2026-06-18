@@ -166,7 +166,7 @@ export default function SupplierManagement() {
       id: String(Date.now()),
       supplierCode: nextCode(rows),
       status,
-      createdBy: "当前用户",
+      createdBy: "张三",
       createdAt: now(),
       updatedAt: now(),
       ...form,

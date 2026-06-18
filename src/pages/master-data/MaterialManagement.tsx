@@ -148,7 +148,7 @@ export default function MaterialManagement({
       systemInfo: editing.systemInfo,
       createdBy: editing.createdBy,
       createdAt: editing.createdAt,
-      updatedBy: "当前用户",
+      updatedBy: "张三",
       updatedAt: now(),
     };
     setRows((current) => current.map((row) => row.id === editing.id ? saved : row));
@@ -169,8 +169,8 @@ export default function MaterialManagement({
   const doStatus = () => {
     if (!confirmRow || !confirmAction) return;
     const status: MaterialStatus = confirmAction === "enable" ? "已启用" : "已停用";
-    setRows((current) => current.map((row) => row.id === confirmRow.id ? { ...row, status, updatedBy: "当前用户", updatedAt: now() } : row));
-    if (detail?.id === confirmRow.id) setDetail({ ...detail, status, updatedBy: "当前用户", updatedAt: now() });
+    setRows((current) => current.map((row) => row.id === confirmRow.id ? { ...row, status, updatedBy: "张三", updatedAt: now() } : row));
+    if (detail?.id === confirmRow.id) setDetail({ ...detail, status, updatedBy: "张三", updatedAt: now() });
     setConfirmRow(null);
     setConfirmAction(null);
     showToast(status === "已启用" ? "物料已启用" : "物料已停用");

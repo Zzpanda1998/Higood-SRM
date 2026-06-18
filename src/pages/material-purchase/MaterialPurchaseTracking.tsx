@@ -1,9 +1,11 @@
-import { useMemo, useState } from "react";
+﻿import { useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import DesignLogicCard from "../../components/common/DesignLogicCard";
 import PageHeader from "../../components/common/PageHeader";
 import Toast from "../../components/common/Toast";
+import { DomesticLogisticsCell, FirstLegLogisticsCell, SplitLogisticsActions } from "../../components/material-purchase/LogisticsSplitDisplay";
 import { idMaterialPurchaseOrders, type IdMaterialPurchaseOrder } from "../../mock/idMaterialPurchaseOrders";
+import { splitLogisticsBusinessRules } from "../../mock/logisticsSplitDemo";
 import type { ImportedLogisticsInfo } from "../../types/materialLogistics";
 import type { TransferBatch } from "../../types/transferBatch";
 import JoinHeadLogisticsModal, {
@@ -200,7 +202,7 @@ export default function MaterialPurchaseTracking({
           </FilterLabel>
           <FilterLabel label="状态">
             <select className="h-8 w-32 rounded border px-2 text-sm" value={filters.status} onChange={(event) => update("status", event.target.value)}>
-              {["请选择", "待签收", "已签收", "待转运", "已发货", "在途", "已到仓", "已入库"].map((item) => <option key={item}>{item}</option>)}
+              {["请选择", "待签收", "已签收", "待转运", "已发货", "在途", "已到仓"].map((item) => <option key={item}>{item}</option>)}
             </select>
           </FilterLabel>
         </div>
@@ -221,13 +223,13 @@ export default function MaterialPurchaseTracking({
       </section>
 
       <div className="overflow-x-auto border border-gray-200 bg-white">
-        <table className="min-w-[2250px] table-fixed text-left text-xs text-gray-800">
+        <table className="min-w-[2480px] table-fixed text-left text-xs text-gray-800">
           <colgroup>
-            {[50,170,260,140,260,235,110,235,210,300].map((width, index) => <col key={index} style={{ width }} />)}
+            {[50,260,290,260,140,260,235,110,235,210,320].map((width, index) => <col key={index} style={{ width }} />)}
           </colgroup>
           <thead className="bg-gray-50">
             <tr>
-              {["勾选框", "物流信息", "采购单信息", "头程物流", "采购数据", "时间", "状态", "物流数据", "备注", "操作"].map((title) => (
+              {["勾选框","国内物流信息","头程物流信息","采购单信息","头程物流单","采购数据","时间","状态","物流数据","备注","操作"].map((title) => (
                 <th key={title} className="border-b border-gray-200 px-2 py-2 font-medium text-gray-700">{title}</th>
               ))}
             </tr>
@@ -238,13 +240,8 @@ export default function MaterialPurchaseTracking({
                 <td className="px-2 py-2 text-center">
                   <input type="checkbox" checked={selected.includes(row.idOrderNo)} disabled={pendingQuantity(row) <= 0} onChange={() => toggle(row.idOrderNo)} />
                 </td>
-                <td className="px-2 py-2 leading-5">
-                  <div className="font-medium">{row.company}</div>
-                  <button className="break-all text-brand" onClick={() => showToast(`查看物流单号：${row.logisticsNo}`)}>{row.logisticsNo}</button>
-                  <div>货运方式：{row.freightMethod}</div>
-                  <div>联系人：{row.contact}</div>
-                  <div>转运中心：{row.transitCenter}</div>
-                </td>
+                <td className="px-2 py-2"><DomesticLogisticsCell data={row.domesticLogistics} /></td>
+                <td className="px-2 py-2"><FirstLegLogisticsCell data={row.firstLegLogistics} /></td>
                 <td className="px-2 py-2 leading-5">
                   <div>采购单：<button className="text-brand" onClick={() => showToast(`查看采购单：${row.idOrderNo}`)}>{row.idOrderNo}</button></div>
                   <div>源采购单：{row.sourceProductOrderNo}</div>
@@ -307,7 +304,7 @@ export default function MaterialPurchaseTracking({
                   <div>质检结果：{row.qualityResult}</div>
                 </td>
                 <td className="px-2 py-2">
-                  <div className="flex w-[280px] flex-wrap gap-1">
+                  <div className="flex w-[300px] flex-wrap gap-1"><SplitLogisticsActions hasDomestic={Boolean(row.domesticLogistics)} hasFirstLeg={Boolean(row.firstLegLogistics)} onAction={(label) => showToast(`${label}：${row.idOrderNo}`)} />
                     <SmallAction color="green" onClick={() => showToast(`签收：${row.logisticsNo}`)}>签收</SmallAction>
                     {pendingQuantity(row) > 0 && <SmallAction onClick={() => openJoinHeadLogistics([row])}>加入头程</SmallAction>}
                     <SmallAction onClick={() => showToast(`查看物流：${row.logisticsNo}`)}>查看物流</SmallAction>
@@ -320,12 +317,14 @@ export default function MaterialPurchaseTracking({
                 </td>
               </tr>
             ))}
-            {rows.length === 0 && <tr><td colSpan={10} className="p-8 text-center text-gray-400">暂无数据</td></tr>}
+            {rows.length === 0 && <tr><td colSpan={11} className="p-8 text-center text-gray-400">暂无数据</td></tr>}
           </tbody>
         </table>
       </div>
 
       <DesignLogicCard sections={[
+        { title: "??????", headers: ["??", "??"], rows: splitLogisticsBusinessRules },
+        { title: "???????????", headers: ["??", "????"], rows: [["??????", "?????????????????????????????????????????"], ["??????", "???????????????????????????????????????????????"], ["????", "??????????????????????"]] },
         { title: "页面定位", headers: ["项目", "说明"], rows: [["页面标题", "面辅料采购物流信息"], ["所属模块", "面辅料采购"], ["菜单名称", "面辅料采购跟踪"], ["结构要求", "标题区、批量按钮区、两行筛选区、物流列表区、设计逻辑说明区"]] },
         { title: "筛选与批量操作", headers: ["区域", "规则", "结果"], rows: [["批量按钮", "批量签收、批量加入头程物流两个按钮常驻横排", "不合并、不放入更多操作"], ["筛选第一行", "物流单号、签收时间、状态", "按老系统顺序紧凑排列"], ["筛选第二行", "采购地区、每页显示、查询、默认", "字段不隐藏、不使用抽屉"]] },
         { title: "加入头程物流单", headers: ["项目", "规则", "结果"], rows: [["打开方式", "勾选一条或多条国内物流记录后点击批量加入头程物流，或点击单行加入头程", "打开加入头程物流单弹窗"], ["数量字段", "展示采购数量、可头程数量、已头程数量、待头程数量，填写头程数量和头程卷数", "支持同一物流记录按剩余数量分批加入"], ["原箱头程", "勾选后头程数量自动等于待头程数量", "取消后允许手动填写本次头程数量"], ["提交校验", "头程物流单号必填且不能重复，头程数量不得超过待头程数量，头程卷数为非负整数", "校验失败不关闭弹窗"], ["状态回写", "部分分配显示部分加入头程物流，全部分配显示已加入头程物流", "全部分配后禁止再次勾选"]] },

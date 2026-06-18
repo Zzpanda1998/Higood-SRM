@@ -3,7 +3,9 @@ import DesignLogicCard from "../../components/common/DesignLogicCard";
 import FormModal from "../../components/common/FormModal";
 import PageHeader from "../../components/common/PageHeader";
 import Toast from "../../components/common/Toast";
+import { DomesticLogisticsCell, FirstLegLogisticsCell, LogisticsSplitDetail, SplitLogisticsActions } from "../../components/material-purchase/LogisticsSplitDisplay";
 import { idMaterialPurchaseOrders, type IdMaterialPurchaseOrder } from "../../mock/idMaterialPurchaseOrders";
+import { splitLogisticsBusinessRules } from "../../mock/logisticsSplitDemo";
 import type { ImportedLogisticsInfo } from "../../types/materialLogistics";
 import { parseExcelRows } from "../../utils/excelImport";
 
@@ -141,6 +143,7 @@ export default function IdMaterialPurchaseOrder({
   const [importRows, setImportRows] = useState<ImportPreviewRow[]>([]);
   const [importFileName, setImportFileName] = useState("");
   const [importing, setImporting] = useState(false);
+  const [detailOrder, setDetailOrder] = useState<IdMaterialPurchaseOrder | null>(null);
 
   const suppliers = useMemo(() => Array.from(new Set(orders.map((row) => row.supplier).filter(Boolean))), [orders]);
   const buyers = useMemo(() => Array.from(new Set(orders.map((row) => row.buyer).filter(Boolean))), [orders]);
@@ -349,9 +352,9 @@ export default function IdMaterialPurchaseOrder({
       </section>
 
       <div className="overflow-x-auto border border-gray-200 bg-white">
-        <table className="min-w-[3200px] table-fixed text-left text-xs text-gray-800">
-          <colgroup>{[40,150,250,280,240,260,130,150,100,160,180,100,90,270].map((width, index) => <col key={index} style={{ width }} />)}</colgroup>
-          <thead className="bg-gray-50"><tr>{["勾选框", "采购单号", "源采购单信息", "面料信息", "采购信息", "物流信息", "时间", "下单 / 商家到货状态", "状态", "成本数据", "备注", "质检结果", "添加人", "操作"].map((title) => <th key={title} className="border-b px-2 py-2 font-medium">{title}</th>)}</tr></thead>
+        <table className="min-w-[3420px] table-fixed text-left text-xs text-gray-800">
+          <colgroup>{[40,150,250,280,240,270,290,130,150,100,160,180,100,90,310].map((width, index) => <col key={index} style={{ width }} />)}</colgroup>
+          <thead className="bg-gray-50"><tr>{["勾选框","采购单号","源采购单信息","面辅料信息","采购信息","国内物流信息","头程物流信息","时间","下单 / 商家到货状态","状态","成本数据","备注","质检结果","添加人","操作"].map((title) => <th key={title} className="border-b px-2 py-2 font-medium">{title}</th>)}</tr></thead>
           <tbody>
             {rows.map((row) => (
               <tr key={row.idOrderNo} className="border-b border-gray-200 align-top hover:bg-gray-50">
@@ -360,7 +363,8 @@ export default function IdMaterialPurchaseOrder({
                 <td className="px-2 py-2 leading-5"><div>源采购单：{row.sourceProductOrderNo.replace(/\D/g, "")}</div><div>计划采购：{qty(row.sourcePurchaseQty)}</div><div>创建时间：{row.sourceCreatedAt}</div><div className="my-1 flex items-center gap-2"><ImageCell src={row.sourceProductImageUrl} name={row.sourceProductName || "-"} size="h-12 w-10" /><span>{row.sourceProductName}</span></div><div>SPU：{row.sourceSpu}</div><button className="mt-1 rounded-sm bg-[#009688] px-2 py-0.5 text-white" onClick={() => showToast("关联商品采购单")}>关联商品采购单</button></td>
                 <td className="px-2 py-2 leading-5"><div><span className="rounded-sm bg-green-600 px-1.5 py-0.5 text-white">{row.materialName}</span></div><div>SPU：{row.materialCode}</div><div>申请人：{row.applicant}</div><div>实际采购价：{qty(row.actualPurchasePrice)}</div><div>单件克重：{qty(row.unitWeight)}</div><div>单件辅料费用：{qty(row.unitMaterialCost)}</div><div className="text-green-700">采购中数量：{qty(row.purchasingQty)}</div><div className="text-red-600">库存：{qty(row.stockQty)}</div><div>单位克重：{qty(row.unitWeight)} KG</div><div>单位成衣：<span className={row.garmentUnit === "未设" ? "text-red-600" : ""}>{row.garmentUnit}</span></div><div className="mt-1 flex flex-wrap gap-1">{["设置重量", "编辑", "面辅料"].map((action) => <button key={action} className="rounded-sm bg-[#009688] px-1.5 py-0.5 text-white" onClick={() => showToast(action)}>{action}</button>)}</div></td>
                 <td className="px-2 py-2 leading-5"><div>使用类型：{row.usageType}</div><div>采购地区：【{row.orderType}】</div><div>采购数量：{qty(row.purchaseQty)} {row.unit}</div><div className="text-green-700">实际采购数量：{qty(row.actualPurchaseQty)}</div><div>商家到货数量：{qty(row.merchantArrivalQty)}</div><div>采购中：{qty(row.purchasingQty)}</div><div className="text-blue-700">到货数量：{qty(row.arrivedQty)}</div><div>入库数量：{qty(row.inboundQty)}</div><div>给付：{qty(row.paidQty)}</div><div className="mt-1 flex flex-wrap gap-1">{["设置供应商", "设置面料供应商"].map((action) => <button key={action} className="rounded-sm bg-[#009688] px-1.5 py-0.5 text-white" onClick={() => showToast(action)}>{action}</button>)}</div></td>
-                <td className="px-2 py-2 leading-5"><div>货运：{row.freightMethod}</div><div>快递：{row.logisticsNo ? <span className="text-brand">{row.logisticsNo}</span> : "-"}</div><div>{row.logisticsStatus}</div><div>{row.contact}</div><div>转运中心：{row.transitCenter}</div><div className={(row.domesticDays ?? 0) > 5 ? "text-red-600" : ""}>国内天数：{row.domesticDays}天</div><div className={(row.estimatedTransitDays ?? 0) > 12 ? "text-red-600" : ""}>预计转运：{row.estimatedTransitDays}天</div><div className="text-brand">{row.transitNo}</div><div>入库单：{row.inboundNo || "-"}</div><div>发货时间：{row.shippedAt || "-"}</div><div>入库时间：{row.inboundAt || "-"}</div><div>{row.inboundAt ? "快递送仓完成" : "待送仓"}</div><button className="mt-1 rounded-sm bg-[#1677ff] px-2 py-0.5 text-white" onClick={() => showToast(row.logisticsNo ? "查看物流信息" : "继续添加物流信息")}>{row.logisticsNo ? "查看物流信息" : "继续添加物流信息"}</button></td>
+                <td className="px-2 py-2"><DomesticLogisticsCell data={row.domesticLogistics} compact /></td>
+                <td className="px-2 py-2"><FirstLegLogisticsCell data={row.firstLegLogistics} compact /></td>
                 <td className="px-2 py-2 leading-5"><div>创建：{dateOnly(row.orderDate)}</div><div>入库：{dateOnly(row.inboundAt)}</div></td>
                 <td className="px-2 py-2 leading-5 text-blue-700"><div>{row.orderStatus}</div><div>{row.merchantArrivalStatus}</div></td>
                 <td className="px-2 py-2">{row.status}</td>
@@ -368,19 +372,34 @@ export default function IdMaterialPurchaseOrder({
                 <td className="whitespace-normal px-2 py-2 leading-5">{row.remark}<br />{row.purchaseRemark}</td>
                 <td className="px-2 py-2">{row.qualityResult || "-"}</td>
                 <td className="px-2 py-2">{row.creator || row.buyer}</td>
-                <td className="px-2 py-2"><div className="flex w-[255px] flex-wrap items-start gap-1">{legacyActions.map(([action, color]) => <button key={action} className={`${actionClass(color)} whitespace-nowrap rounded-sm px-1.5 py-0.5 text-[11px] leading-[18px] text-white`} onClick={() => showToast(`${action}：${row.idOrderNo}`)}>{action}</button>)}</div></td>
+                <td className="px-2 py-2"><div className="flex w-[295px] flex-wrap items-start gap-1"><button className="whitespace-nowrap rounded-sm bg-[#009688] px-1.5 py-0.5 text-[11px] leading-[18px] text-white" onClick={() => setDetailOrder(row)}>查看详情</button><SplitLogisticsActions hasDomestic={Boolean(row.domesticLogistics)} hasFirstLeg={Boolean(row.firstLegLogistics)} onAction={(label) => showToast(`${label}：${row.idOrderNo}`)} />{legacyActions.slice(1, 6).map(([action, color]) => <button key={action} className={`${actionClass(color)} whitespace-nowrap rounded-sm px-1.5 py-0.5 text-[11px] leading-[18px] text-white`} onClick={() => showToast(`${action}：${row.idOrderNo}`)}>{action}</button>)}</div></td>
               </tr>
             ))}
-            {rows.length === 0 && <tr><td colSpan={14} className="p-8 text-center text-gray-400">暂无数据</td></tr>}
+            {rows.length === 0 && <tr><td colSpan={15} className="p-8 text-center text-gray-400">暂无数据</td></tr>}
           </tbody>
         </table>
       </div>
 
       <DesignLogicCard sections={[
+        { title: "业务逻辑说明", headers: ["规则", "说明"], rows: splitLogisticsBusinessRules },
+        { title: "物流字段拆分", headers: ["字段", "展示规则"], rows: [["国内物流信息", "展示供应商发货到国内仓 / 中转仓 / 面辅料仓的物流信息，渠道和状态使用绿色。"], ["头程物流信息", "展示国内仓 / 中转仓发往海外仓 / 印尼仓 / 目的地的头程物流信息，渠道和状态使用蓝色。"], ["空态", "某一阶段没有物流信息时，显示暂无国内物流信息或暂无头程物流信息。"], ["按钮", "国内物流按钮使用绿色，头程物流按钮使用蓝色。"]] },
         { title: "页面定位", headers: ["项目", "说明"], rows: [["页面名称", "面辅料采购单列表"], ["所属模块", "面辅料采购"], ["上游来源", "面辅料需求分析"], ["下游去向", "采购跟踪、到货入库、采购对账"], ["展示结构", "批量操作、密集筛选、导出新增、统计条、高密度列表"]] },
         { title: "筛选与操作", headers: ["区域", "规则", "结果"], rows: [["批量操作", "9个老系统批量入口全部常驻", "勾选采购单后触发Mock提示"], ["筛选区", "21项筛选多行常驻，不折叠、不使用抽屉", "筛选直接作用于采购单列表"], ["导入快递信息", "下载模板、上传 xls/xlsx、解析预览、校验错误、确认导入", "回写采购单物流字段并生成面辅料采购物流信息"], ["统计条", "计划采购商品数与到货商品数按筛选结果汇总", "保留小数展示"]] },
         { title: "列表字段", headers: ["分区", "内容", "展示方式"], rows: [["采购来源", "采购单号、源采购单、源商品图片、SPU", "多行密集展示"], ["物料与采购", "物料价格重量、库存、采购数量、供应商入口", "字段与按钮保留在对应列"], ["物流与成本", "单号、时效、转运、入库、采购费、运费和总成本", "异常天数标红，物流单号标蓝"], ["操作列", "15个操作按钮", "绿蓝橙小按钮横向换行，间距4px"]] },
       ]} />
+      <FormModal open={Boolean(detailOrder)} title={`面辅料采购单详情 ${detailOrder?.idOrderNo ?? ""}`} widthClass="w-[980px]" onClose={() => setDetailOrder(null)}>
+        {detailOrder && (
+          <div className="space-y-3 text-sm">
+            <div className="grid gap-2 rounded border border-gray-200 bg-gray-50 p-3 text-xs md:grid-cols-4">
+              <div>采购单号：<span className="font-medium text-blue-700">{detailOrder.idOrderNo}</span></div>
+              <div>物料：{detailOrder.materialName}</div>
+              <div>供应商：{detailOrder.supplier}</div>
+              <div>采购数量：{qty(detailOrder.purchaseQty)} {detailOrder.unit}</div>
+            </div>
+            <LogisticsSplitDetail domestic={detailOrder.domesticLogistics} firstLeg={detailOrder.firstLegLogistics} />
+          </div>
+        )}
+      </FormModal>
       <FormModal open={importOpen} title="导入快递信息" widthClass="w-[920px]" onClose={() => setImportOpen(false)}>
         <div className="space-y-3 text-sm">
           <div className="rounded border border-blue-100 bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-800">

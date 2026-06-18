@@ -1,5 +1,5 @@
 import { useMemo, useState, type ChangeEvent } from "react";
-import { Check, Download, FileSpreadsheet, Pencil, Search, SlidersHorizontal, Upload } from "lucide-react";
+import { Check, Download, FileSpreadsheet, Pencil, Plus, Search, SlidersHorizontal, Upload } from "lucide-react";
 import DesignLogicCard from "../../components/common/DesignLogicCard";
 import FormModal from "../../components/common/FormModal";
 import PageHeader from "../../components/common/PageHeader";
@@ -151,7 +151,7 @@ function LayerCell({
   </td>;
 }
 
-export default function MaterialPurchaseReconciliation() {
+export default function MaterialPurchaseReconciliation({ onCreatePaymentRequest }: { onCreatePaymentRequest?: (rows: MaterialPurchaseReconciliationRow[]) => void }) {
   const [rows, setRows] = useState(() => initialMaterialPurchaseReconciliationRows.map((row) => withCalculatedFees(row)));
   const [selected, setSelected] = useState<string[]>([]);
   const [toast, setToast] = useState("");
@@ -257,9 +257,9 @@ export default function MaterialPurchaseReconciliation() {
     setRows((current) => current.map((row) => row.id === confirmRow.id ? {
       ...row,
       status: "已确认",
-      confirmedBy: "当前用户",
+      confirmedBy: "张三",
       confirmedAt: now,
-      confirmedItems: row.confirmedItems.map((item) => ({ ...item, confirmed: true, confirmedBy: "当前用户", confirmedAt: now })),
+      confirmedItems: row.confirmedItems.map((item) => ({ ...item, confirmed: true, confirmedBy: "张三", confirmedAt: now })),
     } : row));
     setConfirmRow(null);
     showToast("确认成功");
@@ -271,7 +271,7 @@ export default function MaterialPurchaseReconciliation() {
     setRows((current) => current.map((row) => row.id === partialRow.id ? {
       ...partialRow,
       status: nextStatus,
-      confirmedBy: nextStatus === "已确认" ? "当前用户" : undefined,
+      confirmedBy: nextStatus === "已确认" ? "张三" : undefined,
       confirmedAt: nextStatus === "已确认" ? now : undefined,
     } : row));
     setPartialRow(null);
@@ -281,11 +281,20 @@ export default function MaterialPurchaseReconciliation() {
     if (guardEditing()) return;
     if (!selected.length) return showToast("请先勾选对账记录");
     setRows((current) => current.map((row) => selected.includes(row.id) ? {
-      ...row, status: "已确认", confirmedBy: "当前用户", confirmedAt: now,
-      confirmedItems: row.confirmedItems.map((item) => ({ ...item, confirmed: true, confirmedBy: "当前用户", confirmedAt: now })),
+      ...row, status: "已确认", confirmedBy: "张三", confirmedAt: now,
+      confirmedItems: row.confirmedItems.map((item) => ({ ...item, confirmed: true, confirmedBy: "张三", confirmedAt: now })),
     } : row));
     setSelected([]);
     showToast("批量确认成功");
+  };
+  const generatePaymentRequest = () => {
+    if (!selected.length) return showToast("请先勾选面辅料采购对账记录");
+    const selectedRows = rows.filter((row) => selected.includes(row.id));
+    const invalid = selectedRows.filter((row) => row.status === "待确认");
+    if (invalid.length) return showToast("未确认的对账记录不允许生成请款单");
+    const suppliers = new Set(selectedRows.map((row) => row.supplierName));
+    if (suppliers.size > 1) return showToast("不同供应商需要拆分生成请款单");
+    onCreatePaymentRequest?.(selectedRows);
   };
 
   const parseImportFile = async (file: File) => {
@@ -372,6 +381,7 @@ export default function MaterialPurchaseReconciliation() {
       title="面辅料采购对账"
       desc="按面辅料采购单与 SKU 核对供应商采购货款，费用字段按预计与实际两层展示，支持编辑、部分确认和 Excel 导入。"
       extra={<div className="flex gap-2">
+        <button className="inline-flex h-8 items-center gap-1 rounded border border-blue-200 bg-blue-50 px-3 text-sm text-blue-700" onClick={generatePaymentRequest}><Plus size={14} />生成面辅料采购请款单</button>
         <button className="inline-flex h-8 items-center gap-1 rounded border border-gray-200 bg-white px-3 text-sm" onClick={() => exportRows(filteredRows)}><Download size={14} />导出</button>
         <button className="inline-flex h-8 items-center gap-1 rounded bg-[#009688] px-3 text-sm text-white" onClick={() => guardEditing() || setImportOpen(true)}><Upload size={14} />导入供应商账单</button>
       </div>}
@@ -448,7 +458,7 @@ export default function MaterialPurchaseReconciliation() {
         const estimated = partialRow.estimatedFee[key];
         const actual = partialRow.actualFee[key];
         const difference = actual - estimated;
-        return <tr key={item.feeItem} className="border-b last:border-0"><td className="px-3 py-2 font-medium">{item.feeItem}</td><td className="px-3 py-2 text-right">{money(estimated)}</td><td className="px-3 py-2 text-right">{money(actual)}</td><td className={`px-3 py-2 text-right ${difference > 0 ? "text-red-600" : difference < 0 ? "text-emerald-600" : ""}`}>{money(difference)}</td><td className="px-3 py-2 text-center"><input type="checkbox" checked={item.confirmed} onChange={(event) => setPartialRow({ ...partialRow, confirmedItems: partialRow.confirmedItems.map((feeItem) => feeItem.feeItem === item.feeItem ? { ...feeItem, confirmed: event.target.checked, confirmedBy: event.target.checked ? "当前用户" : undefined, confirmedAt: event.target.checked ? now : undefined } : feeItem) })} /></td></tr>;
+        return <tr key={item.feeItem} className="border-b last:border-0"><td className="px-3 py-2 font-medium">{item.feeItem}</td><td className="px-3 py-2 text-right">{money(estimated)}</td><td className="px-3 py-2 text-right">{money(actual)}</td><td className={`px-3 py-2 text-right ${difference > 0 ? "text-red-600" : difference < 0 ? "text-emerald-600" : ""}`}>{money(difference)}</td><td className="px-3 py-2 text-center"><input type="checkbox" checked={item.confirmed} onChange={(event) => setPartialRow({ ...partialRow, confirmedItems: partialRow.confirmedItems.map((feeItem) => feeItem.feeItem === item.feeItem ? { ...feeItem, confirmed: event.target.checked, confirmedBy: event.target.checked ? "张三" : undefined, confirmedAt: event.target.checked ? now : undefined } : feeItem) })} /></td></tr>;
       })}</tbody></table></div><div className="flex justify-end gap-2 border-t pt-3"><button className="h-8 rounded border px-4" onClick={() => setPartialRow(null)}>取消</button><button className="h-8 rounded bg-amber-500 px-4 text-white" onClick={savePartial}>保存确认结果</button></div></div>}
     </FormModal>
 

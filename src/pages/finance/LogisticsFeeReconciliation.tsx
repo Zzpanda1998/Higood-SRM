@@ -1,5 +1,6 @@
 import { useMemo, useState, type ChangeEvent } from "react";
-import { Check, Download, FileSpreadsheet, Pencil, Search, SlidersHorizontal, Upload } from "lucide-react";
+import { Check, Download, FileSpreadsheet, Pencil, Plus, Search, SlidersHorizontal, Upload } from "lucide-react";
+import DesignLogicCard from "../../components/common/DesignLogicCard";
 import FormModal from "../../components/common/FormModal";
 import PageHeader from "../../components/common/PageHeader";
 import Toast from "../../components/common/Toast";
@@ -51,10 +52,21 @@ const feeColumns: Array<{ key: FeeKey; label: LogisticsFeeItem }> = [
   { key: "customsDeclarationFee", label: "报关费" },
 ];
 
-const importHeaders = ["头程物流单号", "运单号", "货件号", "货代", ...feeColumns.map((item) => item.label), "备注"];
+const importHeaders = ["头程物流单号", "运单号", "货件号", "头程物流商", ...feeColumns.map((item) => item.label), "备注"];
 const money = (value?: number) => (value ?? 0).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const inputClass = "h-8 w-full rounded border border-gray-200 px-2 text-sm outline-none focus:border-blue-500";
 const feeKeys = feeColumns.map((column) => column.key);
+const firstLegCarrierOptions = [
+  "星舰国际物流",
+  "广州城际国际货运",
+  "海拓国际物流",
+  "速航国际物流",
+  "DHL Global Forwarding",
+  "Maersk Logistics",
+  "顺丰速运",
+  "德邦物流",
+  "Pacific Customs Broker",
+];
 
 function normalizeFeeValue(value: unknown): number {
   if (value === null || value === undefined || value === "" || value === "-" || value === "-(-)") return 0;
@@ -81,7 +93,7 @@ const statusClass = (status: string) => {
 };
 
 const downloadTemplate = () => {
-  const sample = ["TB-2026-0001", "DHL-CN-882011", "SHP-ID-260601", "DHL Global Forwarding", "1660", "260", "1581", "460", "210", "180", "95", "0", "货代账单"];
+  const sample = ["TB-2026-0001", "DHL-CN-882011", "SHP-ID-260601", "DHL Global Forwarding", "1660", "260", "1581", "460", "210", "180", "95", "0", "头程物流商账单"];
   const html = `<!doctype html><html><head><meta charset="utf-8"></head><body><table><tr>${importHeaders.map((item) => `<th>${item}</th>`).join("")}</tr><tr>${sample.map((item) => `<td>${item}</td>`).join("")}</tr></table></body></html>`;
   const url = URL.createObjectURL(new Blob([html], { type: "application/vnd.ms-excel;charset=utf-8" }));
   const link = document.createElement("a");
@@ -92,7 +104,7 @@ const downloadTemplate = () => {
 };
 
 const exportRows = (rows: LogisticsReconciliationRow[]) => {
-  const headers = ["头程物流单号", "货代", "运单号", "状态", "预计总费用", "实际总费用", "差异"];
+  const headers = ["头程物流单号", "头程物流商", "运单号", "状态", "预计总费用", "实际总费用", "差异"];
   const body = rows.map((row) => [
     row.firstLegNo,
     row.forwarderName ?? "",
@@ -159,7 +171,13 @@ function FeeCell({
   );
 }
 
-export default function LogisticsFeeReconciliation({ onOpenFirstLeg }: { onOpenFirstLeg: (firstLegNo: string) => void }) {
+export default function LogisticsFeeReconciliation({
+  onOpenFirstLeg,
+  onCreatePaymentRequest,
+}: {
+  onOpenFirstLeg: (firstLegNo: string) => void;
+  onCreatePaymentRequest: (rows: LogisticsReconciliationRow[]) => void;
+}) {
   const [rows, setRows] = useState<LogisticsReconciliationRow[]>(() => initialLogisticsReconciliationRows.map((row) => ({
     ...row,
     estimatedFee: completeFee("预计", row.estimatedFee),
@@ -177,6 +195,7 @@ export default function LogisticsFeeReconciliation({ onOpenFirstLeg }: { onOpenF
   const [importRows, setImportRows] = useState<ImportRow[]>([]);
   const [importFileName, setImportFileName] = useState("");
   const [importing, setImporting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   const showToast = (message: string) => {
     setToast(message);
@@ -188,7 +207,7 @@ export default function LogisticsFeeReconciliation({ onOpenFirstLeg }: { onOpenF
     return (!keyword || text.includes(keyword.toLowerCase()))
       && (!status || row.confirmStatus === status)
       && (!transportMethod || row.transportMethod === transportMethod)
-      && (!forwarder || row.forwarderName?.includes(forwarder));
+      && (!forwarder || row.forwarderName === forwarder);
   }), [forwarder, keyword, rows, status, transportMethod]);
 
   const stats = useMemo(() => ({
@@ -256,8 +275,8 @@ export default function LogisticsFeeReconciliation({ onOpenFirstLeg }: { onOpenF
       ...item,
       status: "已确认",
       confirmStatus: "已确认",
-      confirmedItems: item.confirmedItems.map((feeItem) => ({ ...feeItem, confirmed: true, confirmedBy: "当前用户", confirmedAt: "2026-06-11 10:00" })),
-      confirmedBy: "当前用户",
+      confirmedItems: item.confirmedItems.map((feeItem) => ({ ...feeItem, confirmed: true, confirmedBy: "张三", confirmedAt: "2026-06-11 10:00" })),
+      confirmedBy: "张三",
       confirmedAt: "2026-06-11 10:00",
     } : item));
     showToast(`已确认 ${row.firstLegNo} 全部费用`);
@@ -271,7 +290,7 @@ export default function LogisticsFeeReconciliation({ onOpenFirstLeg }: { onOpenF
       ...confirming,
       status: confirmStatus === "未确认" ? "待确认" : confirmStatus,
       confirmStatus,
-      confirmedBy: confirmStatus === "已确认" ? "当前用户" : undefined,
+      confirmedBy: confirmStatus === "已确认" ? "张三" : undefined,
       confirmedAt: confirmStatus === "已确认" ? "2026-06-11 10:00" : undefined,
     } : row));
     setConfirming(null);
@@ -338,14 +357,27 @@ export default function LogisticsFeeReconciliation({ onOpenFirstLeg }: { onOpenF
     setStatus("");
     setTransportMethod("");
     setForwarder("");
+    setSelectedIds([]);
+  };
+
+  const requestableRows = filteredRows.filter((row) => row.confirmStatus === "已确认");
+  const selectedRequestableRows = filteredRows.filter((row) => selectedIds.includes(row.id) && row.confirmStatus === "已确认");
+  const toggleSelected = (row: LogisticsReconciliationRow, checked: boolean) => {
+    if (row.confirmStatus !== "已确认") return showToast("未完成对账的记录不能生成请款单");
+    setSelectedIds((current) => checked ? [...current, row.id] : current.filter((id) => id !== row.id));
+  };
+  const generatePaymentRequest = (targetRows: LogisticsReconciliationRow[]) => {
+    if (!targetRows.length) return showToast("请先选择已完成对账的记录");
+    onCreatePaymentRequest(targetRows);
   };
 
   return (
     <div>
       <PageHeader
         title="物流费用对账"
-        desc="按头程物流单集中核对预计费用与货代实际费用，支持行内编辑、分项确认和 Excel 导入"
+        desc="按头程物流单集中核对预计费用与头程物流商实际费用，支持行内编辑、分项确认和 Excel 导入"
         extra={<div className="flex gap-2">
+          <button className="inline-flex h-8 items-center gap-1 rounded border border-blue-200 bg-blue-50 px-3 text-sm text-blue-700 hover:bg-blue-100" onClick={() => generatePaymentRequest(selectedRequestableRows)}><Plus size={14} />生成请款单{selectedRequestableRows.length ? `(${selectedRequestableRows.length})` : ""}</button>
           <button className="inline-flex h-8 items-center gap-1 rounded border border-gray-200 bg-white px-3 text-sm text-gray-700 hover:bg-gray-50" onClick={() => exportRows(filteredRows)}><Download size={14} />导出</button>
           <button className="inline-flex h-8 items-center gap-1 rounded bg-[#009688] px-3 text-sm text-white hover:bg-[#00897b]" onClick={() => editing ? showToast("请先保存或取消当前编辑") : setImportOpen(true)}><Upload size={14} />导入实际费用</button>
         </div>}
@@ -353,7 +385,7 @@ export default function LogisticsFeeReconciliation({ onOpenFirstLeg }: { onOpenF
 
       <section className="mb-2 flex flex-wrap items-end gap-2 border border-gray-200 bg-white px-3 py-2">
         <label className="grid gap-1 text-xs text-gray-500"><span>头程物流单 / 运单 / 货件号</span><input className={`${inputClass} w-[210px]`} value={keyword} onChange={(event) => editing ? showToast("当前有未保存费用，请先保存或取消当前编辑") : setKeyword(event.target.value)} placeholder="请输入关键词" /></label>
-        <label className="grid gap-1 text-xs text-gray-500"><span>货代</span><input className={`${inputClass} w-[150px]`} value={forwarder} onChange={(event) => editing ? showToast("当前有未保存费用，请先保存或取消当前编辑") : setForwarder(event.target.value)} placeholder="货代名称" /></label>
+        <label className="grid gap-1 text-xs text-gray-500"><span>头程物流商</span><select className={`${inputClass} w-[190px] bg-white`} value={forwarder} onChange={(event) => editing ? showToast("当前有未保存费用，请先保存或取消当前编辑") : setForwarder(event.target.value)}><option value="">全部</option>{firstLegCarrierOptions.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
         <label className="grid gap-1 text-xs text-gray-500"><span>运输方式</span><select className={`${inputClass} w-[110px] bg-white`} value={transportMethod} onChange={(event) => editing ? showToast("当前有未保存费用，请先保存或取消当前编辑") : setTransportMethod(event.target.value)}><option value="">全部</option><option>空运</option><option>海运</option><option>快递</option><option>陆运</option></select></label>
         <label className="grid gap-1 text-xs text-gray-500"><span>确认状态</span><select className={`${inputClass} w-[110px] bg-white`} value={status} onChange={(event) => editing ? showToast("当前有未保存费用，请先保存或取消当前编辑") : setStatus(event.target.value)}><option value="">全部</option><option>未确认</option><option>部分确认</option><option>已确认</option></select></label>
         <button className="inline-flex h-8 items-center gap-1 rounded bg-blue-600 px-3 text-sm text-white"><Search size={14} />查询</button>
@@ -372,7 +404,7 @@ export default function LogisticsFeeReconciliation({ onOpenFirstLeg }: { onOpenF
         <table className="min-w-[2180px] text-left text-xs">
           <thead className="sticky top-0 z-10 bg-gray-50 text-gray-700">
             <tr>
-              {["头程物流单信息", "货代 / 渠道", "运输信息", ...feeColumns.map((item) => item.label), "费用合计", "差异", "确认状态", "操作"].map((title) => (
+              {["选择", "头程物流单信息", "头程物流商 / 渠道", "运输信息", ...feeColumns.map((item) => item.label), "费用合计", "差异", "确认状态", "操作"].map((title) => (
                 <th key={title} className="whitespace-nowrap border-b border-r border-gray-200 px-2 py-2 font-medium">{title}</th>
               ))}
             </tr>
@@ -382,6 +414,15 @@ export default function LogisticsFeeReconciliation({ onOpenFirstLeg }: { onOpenF
               const isEditing = editing?.rowId === row.id;
               return (
               <tr key={row.id} className={`border-b border-gray-100 align-top hover:bg-blue-50/30 ${isEditing ? "bg-blue-50/50" : ""}`}>
+                <td className="w-[54px] px-2 py-2 text-center">
+                  <input
+                    type="checkbox"
+                    disabled={row.confirmStatus !== "已确认"}
+                    checked={selectedIds.includes(row.id)}
+                    onChange={(event) => toggleSelected(row, event.target.checked)}
+                    title={row.confirmStatus === "已确认" ? "选择生成请款单" : "未完成对账，不能生成请款单"}
+                  />
+                </td>
                 <td className="w-[180px] px-2 py-2">
                   <button className="font-medium text-blue-600 hover:underline" onClick={() => onOpenFirstLeg(row.firstLegNo)}>{row.firstLegNo}</button>
                   <div className="mt-1 text-gray-500">运单：{row.waybillNo ?? "-"}</div>
@@ -418,27 +459,28 @@ export default function LogisticsFeeReconciliation({ onOpenFirstLeg }: { onOpenF
                     <button className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800" onClick={() => startEditing(row)}><Pencil size={13} />编辑费用</button>
                     <button className="inline-flex items-center gap-1 text-amber-600 hover:text-amber-800" onClick={() => editing ? showToast("请先保存或取消当前编辑") : setConfirming(row)}><SlidersHorizontal size={13} />部分确认</button>
                     <button className="inline-flex items-center gap-1 text-emerald-600 hover:text-emerald-800" onClick={() => confirmAll(row)}><Check size={13} />确认全部</button>
+                    <button className={`inline-flex items-center gap-1 ${row.confirmStatus === "已确认" ? "text-blue-600 hover:text-blue-800" : "text-gray-400"}`} disabled={row.confirmStatus !== "已确认"} onClick={() => generatePaymentRequest([row])}><Plus size={13} />生成请款单</button>
                   </div>}
                 </td>
               </tr>
             );})}
-            {!filteredRows.length && <tr><td colSpan={15} className="py-12 text-center text-gray-400">暂无符合条件的物流单</td></tr>}
+            {!filteredRows.length && <tr><td colSpan={16} className="py-12 text-center text-gray-400">暂无符合条件的物流单</td></tr>}
           </tbody>
         </table>
       </section>
 
-      <div className="mt-2 text-xs text-gray-400">共 {filteredRows.length} 条，每行代表一个头程物流单；费用单元格上层为预计，下层为实际。</div>
+      <div className="mt-2 text-xs text-gray-400">共 {filteredRows.length} 条，已完成对账可生成请款单 {requestableRows.length} 条；费用单元格上层为预计，下层为实际。</div>
 
       <FormModal open={Boolean(confirming)} onClose={() => setConfirming(null)} title={`分项确认 ${confirming?.firstLegNo ?? ""}`} widthClass="w-[680px]">
         {confirming && <div className="space-y-3 text-sm">
-          <div className="rounded border border-amber-100 bg-amber-50 px-3 py-2 text-xs text-amber-800">勾选本次已与货代核对无误的费用项。未勾选项目继续保留为待确认。</div>
+          <div className="rounded border border-amber-100 bg-amber-50 px-3 py-2 text-xs text-amber-800">勾选本次已与头程物流商核对无误的费用项。未勾选项目继续保留为待确认。</div>
           <div className="border border-gray-200">
             {feeColumns.map((column) => {
               const item = confirming.confirmedItems.find((statusItem) => statusItem.feeItem === column.label);
               const estimated = normalizeFeeValue(confirming.estimatedFee[column.key]);
               const actual = normalizeFeeValue(confirming.actualFee?.[column.key]);
               return <label key={column.key} className="grid cursor-pointer grid-cols-[32px_1fr_110px_110px_110px] items-center border-b border-gray-100 px-3 py-2 last:border-0">
-                <input type="checkbox" checked={Boolean(item?.confirmed)} onChange={(event) => setConfirming((current) => current ? { ...current, confirmedItems: current.confirmedItems.map((statusItem) => statusItem.feeItem === column.label ? { ...statusItem, confirmed: event.target.checked, confirmedBy: event.target.checked ? "当前用户" : undefined, confirmedAt: event.target.checked ? "2026-06-11 10:00" : undefined } : statusItem) } : current)} />
+                <input type="checkbox" checked={Boolean(item?.confirmed)} onChange={(event) => setConfirming((current) => current ? { ...current, confirmedItems: current.confirmedItems.map((statusItem) => statusItem.feeItem === column.label ? { ...statusItem, confirmed: event.target.checked, confirmedBy: event.target.checked ? "张三" : undefined, confirmedAt: event.target.checked ? "2026-06-11 10:00" : undefined } : statusItem) } : current)} />
                 <span className="font-medium">{column.label}</span>
                 <span className="text-right text-gray-500">预计 {money(estimated)}</span>
                 <span className="text-right">实际 {money(actual)}</span>
@@ -473,13 +515,36 @@ export default function LogisticsFeeReconciliation({ onOpenFirstLeg }: { onOpenF
                   {feeColumns.map((column) => <td key={column.key} className="px-2 py-2 text-right">{money(row.values[column.key])}</td>)}
                   <td className="px-2 py-2">{row.remark || "-"}</td>
                 </tr>)}
-                {!importRows.length && <tr><td colSpan={15} className="p-10 text-center text-gray-400">下载模板并上传货代实际费用文件后，在此预览校验结果。</td></tr>}
+                {!importRows.length && <tr><td colSpan={15} className="p-10 text-center text-gray-400">下载模板并上传头程物流商实际费用文件后，在此预览校验结果。</td></tr>}
               </tbody>
             </table>
           </div>
           <div className="flex items-center justify-between border-t pt-3"><div className="text-xs text-gray-500">共 {importRows.length} 条，错误 {importRows.filter((row) => row.errors.length).length} 条</div><div className="flex gap-2"><button className="h-8 rounded border px-4" onClick={() => { setImportRows([]); setImportFileName(""); }}>清空</button><button className="h-8 rounded bg-[#009688] px-4 text-white" onClick={confirmImport}>确认导入</button></div></div>
         </div>
       </FormModal>
+
+      <DesignLogicCard sections={[
+        {
+          title: "页面功能说明",
+          headers: ["说明项", "内容"],
+          rows: [
+            ["采购对账模块", "采购对账模块当前保留面辅料采购对账、物流费用对账和物流费用请款。物流费用对账中的头程物流商筛选项来自头程物流商管理，用于按物流商筛选费用对账记录。系统中申请人、请款人、操作人等人员字段统一显示真实姓名，不再显示“当前用户”。"],
+          ],
+        },
+        {
+          title: "业务逻辑说明",
+          headers: ["业务场景", "规则说明", "页面结果"],
+          rows: [
+            ["菜单精简", "删除应付明细池、对账单管理、付款记录入口", "左侧采购对账菜单更简洁"],
+            ["删除无效 Tab", "已删除模块不应继续作为顶部 Tab 打开", "页面不再出现无效功能入口"],
+            ["人员名称展示", "不再显示“当前用户”", "申请人、请款人、操作人显示具体姓名"],
+            ["头程物流商筛选", "货代字段改为头程物流商下拉", "用户可从物流商列表中选择"],
+            ["枚举来源", "头程物流商下拉来自头程物流商管理", "筛选项与物流商档案保持一致"],
+            ["查询筛选", "选择头程物流商后点击查询", "列表只显示对应物流商记录"],
+            ["字段统一", "物流费用对账中统一叫头程物流商", "避免货代、物流商、承运商混用"],
+          ],
+        },
+      ]} />
 
       <Toast msg={toast} />
     </div>

@@ -120,7 +120,7 @@ export default function UnitManagement() {
       referencedMaterialCount: 0,
       referencedPurchaseOrderCount: 0,
       recentUsedTime: "",
-      createdBy: "当前用户",
+      createdBy: "张三",
       createdAt: now(),
       updatedAt: now(),
       ...form,

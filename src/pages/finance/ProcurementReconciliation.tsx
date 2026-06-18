@@ -130,7 +130,7 @@ export default function ProcurementReconciliation({ view, payables, setPayables,
         finalAmount: row.amount,
       })),
       createdAt: "2026-06-11 10:00",
-      createdBy: "当前用户",
+      createdBy: "张三",
     };
     setOrders((current) => [next, ...current]);
     setPayables((current) => current.map((row) => selected.includes(row.id) ? { ...row, reconciliationStatus: "对账中", reconciliationNo: no } : row));
@@ -211,7 +211,7 @@ export default function ProcurementReconciliation({ view, payables, setPayables,
       paymentMethod,
       paymentTime: paymentTime.replace("T", " "),
       paymentVoucher: paymentVoucher || undefined,
-      paidBy: "当前用户",
+      paidBy: "张三",
       createdAt: "2026-06-11 10:00",
       remark: paymentRemark,
     }, ...current]);

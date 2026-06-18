@@ -32,7 +32,11 @@ import { initialFirstLegCarriers, initialFirstLegCarrierChannels } from "./mock/
 import ProductPurchaseReconciliation from "./pages/finance/ProductPurchaseReconciliation";
 import ProcurementReconciliation, { type ReconciliationView } from "./pages/finance/ProcurementReconciliation";
 import LogisticsFeeReconciliation from "./pages/finance/LogisticsFeeReconciliation";
+import LogisticsPaymentRequest from "./pages/finance/LogisticsPaymentRequest";
+import MaterialPaymentRequest from "./pages/finance/MaterialPaymentRequest";
 import MaterialPurchaseReconciliation from "./pages/finance/MaterialPurchaseReconciliation";
+import { createLogisticsPaymentRequestDraftFromRows } from "./mock/logisticsPaymentRequests";
+import { createMaterialPaymentRequestDraftFromRows } from "./mock/materialPaymentRequests";
 import { initialOrders, initialPayables, initialPayments } from "./mock/reconciliation";
 import UserManagement from "./pages/settings/UserManagement";
 import RoleManagement from "./pages/settings/RoleManagement";
@@ -40,6 +44,10 @@ import DictionaryConfig from "./pages/settings/DictionaryConfig";
 import type { ImportedLogisticsInfo } from "./types/materialLogistics";
 import type { TransferBatch } from "./types/transferBatch";
 import type { FirstLegCarrier, FirstLegCarrierChannel } from "./types/firstLegCarrier";
+import type { LogisticsPaymentRequest as LogisticsPaymentRequestType } from "./types/logisticsPaymentRequest";
+import type { MaterialPaymentRequest as MaterialPaymentRequestType } from "./types/materialPaymentRequest";
+import type { LogisticsReconciliationRow } from "./types/finance";
+import type { MaterialPurchaseReconciliationRow } from "./types/finance";
 
 const staticViews: Record<string, ReactElement> = {
   PMS首页: <Dashboard />,
@@ -62,8 +70,8 @@ const staticViews: Record<string, ReactElement> = {
   字典配置: <DictionaryConfig />,
 };
 
-const reconciliationViews = new Set<ReconciliationView>(["应付明细池", "面辅料采购对账", "物流费用对账", "对账单管理", "付款记录"]);
-const dynamicViewKeys = new Set(["商品采购建议", "KOL采购需求", "面辅料采购单", "面辅料采购跟踪", "头程物流", "头程物流商管理", ...reconciliationViews]);
+const reconciliationViews = new Set<ReconciliationView>(["面辅料采购对账", "物流费用对账"]);
+const dynamicViewKeys = new Set(["商品采购建议", "KOL采购需求", "面辅料采购单", "面辅料采购跟踪", "头程物流", "头程物流商管理", "面辅料采购请款", "面辅料采购请款单 - 新建", "物流费用请款", "物流费用请款单 - 新建", ...reconciliationViews]);
 const normalizeViewKey = (key: string) => {
   if (key === "供应商管理") return "商品供应商管理";
   if (key === "成衣 / 样衣列表") return "成衣列表";
@@ -93,6 +101,8 @@ export default function App() {
   const [payables, setPayables] = useState(initialPayables);
   const [reconciliationOrders, setReconciliationOrders] = useState(initialOrders);
   const [paymentRecords, setPaymentRecords] = useState(initialPayments);
+  const [logisticsPaymentDraft, setLogisticsPaymentDraft] = useState<LogisticsPaymentRequestType | null>(null);
+  const [materialPaymentDraft, setMaterialPaymentDraft] = useState<MaterialPaymentRequestType | null>(null);
   const materialLogisticsRecords = useMemo(() => createMaterialLogisticsRows(materialOrders, importedLogistics), [importedLogistics, materialOrders]);
 
   const openMenu = (key: string) => {
@@ -123,6 +133,20 @@ export default function App() {
   const openFirstLegLogistics = (firstLegNo: string) => {
     setTargetFirstLegNo(firstLegNo);
     openMenu("头程物流");
+  };
+
+  const openLogisticsPaymentCreate = (rows: LogisticsReconciliationRow[]) => {
+    setLogisticsPaymentDraft(createLogisticsPaymentRequestDraftFromRows(rows));
+    const viewKey = "物流费用请款单 - 新建";
+    setActive(viewKey);
+    setTabs((current) => (current.some((tab) => tab.key === viewKey) ? current : [...current, { key: viewKey, title: viewKey }]));
+  };
+
+  const openMaterialPaymentCreate = (rows: MaterialPurchaseReconciliationRow[]) => {
+    setMaterialPaymentDraft(createMaterialPaymentRequestDraftFromRows(rows));
+    const viewKey = "面辅料采购请款单 - 新建";
+    setActive(viewKey);
+    setTabs((current) => (current.some((tab) => tab.key === viewKey) ? current : [...current, { key: viewKey, title: viewKey }]));
   };
 
   const createTransferBatchFromLogistics = ({ headLogisticsNo, allocations }: JoinHeadLogisticsPayload) => {
@@ -191,10 +215,22 @@ export default function App() {
       return <FirstLegCarrierManagement carriers={firstLegCarriers} setCarriers={setFirstLegCarriers} channels={firstLegCarrierChannels} setChannels={setFirstLegCarrierChannels} />;
     }
     if (active === "物流费用对账") {
-      return <LogisticsFeeReconciliation onOpenFirstLeg={openFirstLegLogistics} />;
+      return <LogisticsFeeReconciliation onOpenFirstLeg={openFirstLegLogistics} onCreatePaymentRequest={openLogisticsPaymentCreate} />;
+    }
+    if (active === "物流费用请款") {
+      return <LogisticsPaymentRequest />;
+    }
+    if (active === "物流费用请款单 - 新建") {
+      return <LogisticsPaymentRequest initialMode="create" initialDraft={logisticsPaymentDraft ?? undefined} />;
+    }
+    if (active === "面辅料采购请款") {
+      return <MaterialPaymentRequest />;
+    }
+    if (active === "面辅料采购请款单 - 新建") {
+      return <MaterialPaymentRequest initialMode="create" initialDraft={materialPaymentDraft ?? undefined} />;
     }
     if (active === "面辅料采购对账") {
-      return <MaterialPurchaseReconciliation />;
+      return <MaterialPurchaseReconciliation onCreatePaymentRequest={openMaterialPaymentCreate} />;
     }
     if (reconciliationViews.has(active as ReconciliationView)) {
       return (
@@ -210,7 +246,7 @@ export default function App() {
       );
     }
     return staticViews[active] ?? <Dashboard />;
-  }, [active, firstLegCarrierChannels, firstLegCarriers, importedLogistics, kolDemands, materialLogisticsRecords, materialOrders, paymentRecords, payables, reconciliationOrders, suggestions, targetFirstLegNo, transferBatches]);
+  }, [active, firstLegCarrierChannels, firstLegCarriers, importedLogistics, kolDemands, logisticsPaymentDraft, materialLogisticsRecords, materialOrders, paymentRecords, payables, reconciliationOrders, suggestions, targetFirstLegNo, transferBatches]);
 
   return (
     <Layout role={role} setRole={setRole} activeMenu={active} onMenuClick={openMenu} tabs={tabs} onTabSwitch={switchTab} onTabClose={closeTab}>

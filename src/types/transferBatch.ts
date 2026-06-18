@@ -6,7 +6,17 @@ export type TransferBatchRecord = MaterialLogisticsRecord & {
   originalBoxHead?: boolean;
 };
 
-export type TransferBatchStatus = "待转运" | "头程中" | "已到仓" | "已完成" | "待交货" | "已交货" | "已发货" | "已入库";
+export type TransferBatchStatus =
+  | "待起运"
+  | "已装柜"
+  | "头程中"
+  | "已到仓"
+  | "已完成"
+  | "待交货"
+  | "已交货"
+  | "已发货"
+  | "已入库"
+  | string;
 
 export type TransferBatch = {
   batchNo: string;
@@ -14,6 +24,7 @@ export type TransferBatch = {
   transferCenter: string;
   destinationWarehouse: string;
   carrier: string;
+  carrierName?: string;
   carrierId?: string;
   carrierCode?: string;
   channelId?: string;
@@ -28,7 +39,9 @@ export type TransferBatch = {
   creator: string;
   createdAt: string;
   plannedShipDate: string;
+  containerLoadedAt?: string;
   actualShipDate?: string;
+  actualWarehouseSignedAt?: string;
   arrivedAt?: string;
   status: TransferBatchStatus;
   remark: string;
