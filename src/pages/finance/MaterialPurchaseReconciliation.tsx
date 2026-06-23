@@ -1,5 +1,5 @@
 import { useMemo, useState, type ChangeEvent } from "react";
-import { Check, Download, FileSpreadsheet, Pencil, Plus, Search, SlidersHorizontal, Upload } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Download, FileSpreadsheet, Pencil, Plus, Search, SlidersHorizontal, Upload } from "lucide-react";
 import DesignLogicCard from "../../components/common/DesignLogicCard";
 import FormModal from "../../components/common/FormModal";
 import PageHeader from "../../components/common/PageHeader";
@@ -8,7 +8,9 @@ import { initialMaterialPurchaseReconciliationRows } from "../../mock/materialPu
 import type {
   Currency,
   MaterialFeeItem,
+  MaterialPurchaseConfirmStatus,
   MaterialPurchaseReconciliationRow,
+  MaterialPurchaseType,
   MaterialReconciliationFeeLayer,
 } from "../../types/finance";
 import { parseExcelRows } from "../../utils/excelImport";
@@ -32,6 +34,36 @@ type ImportPreviewRow = {
   remark: string;
   errors: string[];
 };
+type KeywordType = "reconciliationNo" | "materialPurchaseNo" | "sourceGoodsPurchaseNo" | "materialSku" | "materialName" | "supplierName";
+type CurrencyFilter = "" | "CNY" | "USD" | "IDR";
+type DifferenceFilter = "" | "有差异" | "无差异";
+type YesNoFilter = "" | "是" | "否";
+type ReconciliationFilters = {
+  keywordType: KeywordType;
+  keyword: string;
+  supplierName: string;
+  materialSku: string;
+  currency: CurrencyFilter;
+  status: "" | MaterialPurchaseConfirmStatus;
+  sourceGoodsPurchaseNo: string;
+  materialName: string;
+  materialCategory: "" | MaterialPurchaseType;
+  unit: string;
+  orderedStart: string;
+  orderedEnd: string;
+  arrivedStart: string;
+  arrivedEnd: string;
+  inboundStart: string;
+  inboundEnd: string;
+  purchaseQtyMin: string;
+  purchaseQtyMax: string;
+  inboundQtyMin: string;
+  inboundQtyMax: string;
+  differenceAmountMin: string;
+  differenceAmountMax: string;
+  hasDifference: DifferenceFilter;
+  paymentRequestGenerated: YesNoFilter;
+};
 
 const feeColumns: Array<{ key: FeeKey; label: string; allowNegative?: boolean }> = [
   { key: "unitPrice", label: "采购单价" },
@@ -43,6 +75,41 @@ const feeKeys = feeColumns.map((item) => item.key);
 const confirmItems: MaterialFeeItem[] = ["采购货款", "供应商账单金额", "调整金额", "最终应付金额"];
 const inputClass = "h-8 rounded border border-gray-200 bg-white px-2 text-sm outline-none focus:border-blue-500";
 const now = "2026-06-15 10:00";
+const defaultFilters: ReconciliationFilters = {
+  keywordType: "materialPurchaseNo",
+  keyword: "",
+  supplierName: "",
+  materialSku: "",
+  currency: "",
+  status: "",
+  sourceGoodsPurchaseNo: "",
+  materialName: "",
+  materialCategory: "",
+  unit: "",
+  orderedStart: "",
+  orderedEnd: "",
+  arrivedStart: "",
+  arrivedEnd: "",
+  inboundStart: "",
+  inboundEnd: "",
+  purchaseQtyMin: "",
+  purchaseQtyMax: "",
+  inboundQtyMin: "",
+  inboundQtyMax: "",
+  differenceAmountMin: "",
+  differenceAmountMax: "",
+  hasDifference: "",
+  paymentRequestGenerated: "",
+};
+const keywordOptions: Array<{ value: KeywordType; label: string }> = [
+  { value: "reconciliationNo", label: "对账单号" },
+  { value: "materialPurchaseNo", label: "面辅料采购单号" },
+  { value: "sourceGoodsPurchaseNo", label: "来源商品采购单号" },
+  { value: "materialSku", label: "面辅料SKU" },
+  { value: "materialName", label: "物料名称" },
+  { value: "supplierName", label: "供应商名称" },
+];
+const supplierOptions = ["广州华盛面料有限公司", "东莞宏远辅料有限公司", "苏州恒润包装材料有限公司", "PT Textile Nusantara", "义乌小料供应商", "深圳包装材料供应商"];
 
 function normalizeFeeValue(value: unknown): number {
   if (value === null || value === undefined || value === "" || value === "-" || value === "-(-)") return 0;
@@ -54,6 +121,73 @@ const money = (value: unknown) => normalizeFeeValue(value).toLocaleString("zh-CN
 const quantity = (value?: number) => normalizeFeeValue(value).toLocaleString("zh-CN", { maximumFractionDigits: 2 });
 const statusClass = (status: string) => status === "已确认" ? "bg-emerald-50 text-emerald-700" : status === "部分确认" ? "bg-amber-50 text-amber-700" : "bg-blue-50 text-blue-700";
 const baseQuantity = (row: MaterialPurchaseReconciliationRow) => row.inboundQty && row.inboundQty > 0 ? row.inboundQty : row.purchaseQty;
+const currencyFilterValue = (currency: Currency): CurrencyFilter => currency === "RMB" ? "CNY" : currency;
+const includesText = (value: unknown, keyword: string) => String(value ?? "").toLowerCase().includes(keyword.trim().toLowerCase());
+const isDateInRange = (value: string | undefined, start: string, end: string) =>
+  (!start || Boolean(value && value >= start)) && (!end || Boolean(value && value <= end));
+const isNumberInRange = (value: number, min: string, max: string) => {
+  const minValue = min === "" ? Number.NEGATIVE_INFINITY : Number(min);
+  const maxValue = max === "" ? Number.POSITIVE_INFINITY : Number(max);
+  return value >= minValue && value <= maxValue;
+};
+const getKeywordValue = (row: MaterialPurchaseReconciliationRow, keywordType: KeywordType) => {
+  const valueMap: Record<KeywordType, string | undefined> = {
+    reconciliationNo: row.reconciliationNo,
+    materialPurchaseNo: row.materialPurchaseNo,
+    sourceGoodsPurchaseNo: row.sourceGoodsPurchaseNo,
+    materialSku: row.materialSku,
+    materialName: row.materialName,
+    supplierName: row.supplierName,
+  };
+  return valueMap[keywordType] ?? "";
+};
+
+function filterRows(rows: MaterialPurchaseReconciliationRow[], filters: ReconciliationFilters) {
+  return rows.filter((row) => {
+    const inboundQty = normalizeFeeValue(row.inboundQty);
+    const hasDifference = normalizeFeeValue(row.differenceAmount) !== 0;
+    return (!filters.keyword || includesText(getKeywordValue(row, filters.keywordType), filters.keyword))
+      && (!filters.supplierName || row.supplierName === filters.supplierName)
+      && (!filters.materialSku || includesText(row.materialSku, filters.materialSku))
+      && (!filters.currency || currencyFilterValue(row.currency) === filters.currency)
+      && (!filters.status || row.status === filters.status)
+      && (!filters.sourceGoodsPurchaseNo || includesText(row.sourceGoodsPurchaseNo, filters.sourceGoodsPurchaseNo))
+      && (!filters.materialName || includesText(row.materialName, filters.materialName))
+      && (!filters.materialCategory || row.purchaseType === filters.materialCategory)
+      && (!filters.unit || row.unit === filters.unit)
+      && isDateInRange(row.orderedAt, filters.orderedStart, filters.orderedEnd)
+      && isDateInRange(row.arrivedAt, filters.arrivedStart, filters.arrivedEnd)
+      && isDateInRange(row.inboundAt, filters.inboundStart, filters.inboundEnd)
+      && isNumberInRange(row.purchaseQty, filters.purchaseQtyMin, filters.purchaseQtyMax)
+      && isNumberInRange(inboundQty, filters.inboundQtyMin, filters.inboundQtyMax)
+      && isNumberInRange(row.differenceAmount, filters.differenceAmountMin, filters.differenceAmountMax)
+      && (!filters.hasDifference || (filters.hasDifference === "有差异" ? hasDifference : !hasDifference))
+      && (!filters.paymentRequestGenerated || (filters.paymentRequestGenerated === "是" ? row.paymentRequestGenerated : !row.paymentRequestGenerated));
+  });
+}
+
+function summarizeFilters(filters: ReconciliationFilters) {
+  const items: string[] = [];
+  const keywordLabel = keywordOptions.find((item) => item.value === filters.keywordType)?.label ?? "关键词";
+  if (filters.keyword) items.push(`${keywordLabel}=${filters.keyword}`);
+  if (filters.supplierName) items.push(`供应商=${filters.supplierName}`);
+  if (filters.materialSku) items.push(`面辅料SKU=${filters.materialSku}`);
+  if (filters.currency) items.push(`币种=${filters.currency}`);
+  if (filters.status) items.push(`对账状态=${filters.status}`);
+  if (filters.sourceGoodsPurchaseNo) items.push(`来源商品采购单号=${filters.sourceGoodsPurchaseNo}`);
+  if (filters.materialName) items.push(`物料名称=${filters.materialName}`);
+  if (filters.materialCategory) items.push(`物料分类=${filters.materialCategory}`);
+  if (filters.unit) items.push(`单位=${filters.unit}`);
+  if (filters.orderedStart || filters.orderedEnd) items.push(`下单时间=${filters.orderedStart || "不限"} 至 ${filters.orderedEnd || "不限"}`);
+  if (filters.arrivedStart || filters.arrivedEnd) items.push(`到货时间=${filters.arrivedStart || "不限"} 至 ${filters.arrivedEnd || "不限"}`);
+  if (filters.inboundStart || filters.inboundEnd) items.push(`入库时间=${filters.inboundStart || "不限"} 至 ${filters.inboundEnd || "不限"}`);
+  if (filters.purchaseQtyMin || filters.purchaseQtyMax) items.push(`采购数量=${filters.purchaseQtyMin || "不限"} 至 ${filters.purchaseQtyMax || "不限"}`);
+  if (filters.inboundQtyMin || filters.inboundQtyMax) items.push(`入库数量=${filters.inboundQtyMin || "不限"} 至 ${filters.inboundQtyMax || "不限"}`);
+  if (filters.differenceAmountMin || filters.differenceAmountMax) items.push(`差异金额=${filters.differenceAmountMin || "不限"} 至 ${filters.differenceAmountMax || "不限"}`);
+  if (filters.hasDifference) items.push(`是否有差异=${filters.hasDifference}`);
+  if (filters.paymentRequestGenerated) items.push(`是否已生成请款单=${filters.paymentRequestGenerated}`);
+  return items.length ? items.join("；") : "全部";
+}
 
 function calculateLayer(
   row: MaterialPurchaseReconciliationRow,
@@ -162,11 +296,9 @@ export default function MaterialPurchaseReconciliation({ onCreatePaymentRequest 
   const [importRows, setImportRows] = useState<ImportPreviewRow[]>([]);
   const [importFileName, setImportFileName] = useState("");
   const [importing, setImporting] = useState(false);
-  const [materialPurchaseNo, setMaterialPurchaseNo] = useState("");
-  const [supplier, setSupplier] = useState("");
-  const [materialSku, setMaterialSku] = useState("");
-  const [status, setStatus] = useState("");
-  const [currency, setCurrency] = useState("");
+  const [filters, setFilters] = useState<ReconciliationFilters>(defaultFilters);
+  const [appliedFilters, setAppliedFilters] = useState<ReconciliationFilters>(defaultFilters);
+  const [moreFiltersOpen, setMoreFiltersOpen] = useState(false);
 
   const showToast = (message: string) => {
     setToast(message);
@@ -177,14 +309,10 @@ export default function MaterialPurchaseReconciliation({ onCreatePaymentRequest 
     showToast("请先保存或取消当前编辑");
     return true;
   };
-  const filteredRows = useMemo(() => rows.filter((row) =>
-    (!materialPurchaseNo || row.materialPurchaseNo.toLowerCase().includes(materialPurchaseNo.toLowerCase()))
-    && (!supplier || row.supplierName.includes(supplier))
-    && (!materialSku || row.materialSku.toLowerCase().includes(materialSku.toLowerCase()))
-    && (!status || row.status === status)
-    && (!currency || row.currency === currency)
-  ), [currency, materialPurchaseNo, materialSku, rows, status, supplier]);
-  const suppliers = useMemo(() => Array.from(new Set(rows.map((row) => row.supplierName))), [rows]);
+  const filteredRows = useMemo(() => filterRows(rows, appliedFilters), [appliedFilters, rows]);
+  const filterSummary = useMemo(() => summarizeFilters(appliedFilters), [appliedFilters]);
+  const allSupplierOptions = useMemo(() => Array.from(new Set([...supplierOptions, ...rows.map((row) => row.supplierName)])), [rows]);
+  const unitOptions = useMemo(() => Array.from(new Set(rows.map((row) => row.unit))), [rows]);
 
   const totals = useMemo(() => {
     const currencyTotals = (selector: (row: MaterialPurchaseReconciliationRow) => number) =>
@@ -296,6 +424,34 @@ export default function MaterialPurchaseReconciliation({ onCreatePaymentRequest 
     if (suppliers.size > 1) return showToast("不同供应商需要拆分生成请款单");
     onCreatePaymentRequest?.(selectedRows);
   };
+  const batchPartialConfirm = () => {
+    if (guardEditing()) return;
+    if (!selected.length) return showToast("请先勾选对账记录");
+    setRows((current) => current.map((row) => selected.includes(row.id) && row.status === "待确认" ? {
+      ...row,
+      status: "部分确认",
+      confirmedItems: row.confirmedItems.map((item) => item.feeItem === "采购货款" ? { ...item, confirmed: true, confirmedBy: "张三", confirmedAt: now } : item),
+    } : row));
+    setSelected([]);
+    showToast("批量部分确认成功");
+  };
+  const applySearch = () => {
+    if (guardEditing()) return;
+    setAppliedFilters({ ...filters });
+    setSelected([]);
+  };
+  const resetSearch = () => {
+    if (guardEditing()) return;
+    setFilters(defaultFilters);
+    setAppliedFilters(defaultFilters);
+    setMoreFiltersOpen(false);
+    setSelected([]);
+  };
+  const updateFilter = <K extends keyof ReconciliationFilters>(key: K, value: ReconciliationFilters[K]) => {
+    if (editing && !window.confirm("当前有未保存费用，是否放弃修改？")) return;
+    if (editing) setEditing(null);
+    setFilters((current) => ({ ...current, [key]: value }));
+  };
 
   const parseImportFile = async (file: File) => {
     setImportFileName(file.name);
@@ -368,34 +524,95 @@ export default function MaterialPurchaseReconciliation({ onCreatePaymentRequest 
     setImportOpen(false);
   };
 
-  const filterChange = (setter: (value: string) => void, value: string) => {
-    if (editing && !window.confirm("当前有未保存费用，是否放弃修改？")) return;
-    if (editing) setEditing(null);
-    setter(value);
-  };
-
   const columns = ["", "面辅料采购单号", "来源商品采购单号", "供应商", "面辅料SKU", "物料名称", "规格 / 颜色", "单位", "采购类型", "采购员", "状态", "下单时间", "到货时间", "入库时间", "采购数量", "到货数量", "入库数量", "币种", "费用类型", ...feeColumns.map((item) => item.label), "最终应付金额", "差异金额", "备注", "操作"];
 
   return <div>
     <PageHeader
       title="面辅料采购对账"
       desc="按面辅料采购单与 SKU 核对供应商采购货款，费用字段按预计与实际两层展示，支持编辑、部分确认和 Excel 导入。"
-      extra={<div className="flex gap-2">
-        <button className="inline-flex h-8 items-center gap-1 rounded border border-blue-200 bg-blue-50 px-3 text-sm text-blue-700" onClick={generatePaymentRequest}><Plus size={14} />生成面辅料采购请款单</button>
-        <button className="inline-flex h-8 items-center gap-1 rounded border border-gray-200 bg-white px-3 text-sm" onClick={() => exportRows(filteredRows)}><Download size={14} />导出</button>
-        <button className="inline-flex h-8 items-center gap-1 rounded bg-[#009688] px-3 text-sm text-white" onClick={() => guardEditing() || setImportOpen(true)}><Upload size={14} />导入供应商账单</button>
-      </div>}
     />
 
-    <section className="mb-2 flex flex-wrap items-end gap-2 border border-gray-200 bg-white px-3 py-2">
-      <label className="grid gap-1 text-xs text-gray-500"><span>面辅料采购单号</span><input className={`${inputClass} w-[170px]`} value={materialPurchaseNo} onChange={(event) => filterChange(setMaterialPurchaseNo, event.target.value)} /></label>
-      <label className="grid gap-1 text-xs text-gray-500"><span>供应商</span><select className={`${inputClass} w-[190px]`} value={supplier} onChange={(event) => filterChange(setSupplier, event.target.value)}><option value="">全部</option>{suppliers.map((item) => <option key={item}>{item}</option>)}</select></label>
-      <label className="grid gap-1 text-xs text-gray-500"><span>面辅料SKU</span><input className={`${inputClass} w-[160px]`} value={materialSku} onChange={(event) => filterChange(setMaterialSku, event.target.value)} /></label>
-      <label className="grid gap-1 text-xs text-gray-500"><span>币种</span><select className={`${inputClass} w-[90px]`} value={currency} onChange={(event) => filterChange(setCurrency, event.target.value)}><option value="">全部</option><option>RMB</option><option>USD</option><option>IDR</option></select></label>
-      <label className="grid gap-1 text-xs text-gray-500"><span>状态</span><select className={`${inputClass} w-[110px]`} value={status} onChange={(event) => filterChange(setStatus, event.target.value)}><option value="">全部</option><option>待确认</option><option>部分确认</option><option>已确认</option></select></label>
-      <button className="inline-flex h-8 items-center gap-1 rounded bg-blue-600 px-3 text-sm text-white"><Search size={14} />查询</button>
-      <button className="h-8 rounded border border-gray-200 px-3 text-sm" onClick={() => { if (guardEditing()) return; setMaterialPurchaseNo(""); setSupplier(""); setMaterialSku(""); setCurrency(""); setStatus(""); }}>清空</button>
-      <button className="h-8 rounded border border-emerald-200 px-3 text-sm text-emerald-700" onClick={batchConfirm}>批量确认</button>
+    <section className="mb-2 border border-gray-200 bg-white">
+      <div className="border-b border-gray-100 px-3 py-2">
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-gray-800">基础筛选</h2>
+          <span className="text-xs text-gray-400">填写条件后点击查询，表格按当前查询条件刷新</span>
+        </div>
+        <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-[150px_220px_240px_170px_110px_130px_auto]">
+          <label className="grid gap-1 text-xs text-gray-500">
+            <span>关键词类型</span>
+            <select className={inputClass} value={filters.keywordType} onChange={(event) => updateFilter("keywordType", event.target.value as KeywordType)}>
+              {keywordOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+            </select>
+          </label>
+          <label className="grid gap-1 text-xs text-gray-500">
+            <span>关键词</span>
+            <input className={inputClass} placeholder="请输入搜索内容" value={filters.keyword} onChange={(event) => updateFilter("keyword", event.target.value)} />
+          </label>
+          <label className="grid gap-1 text-xs text-gray-500">
+            <span>供应商</span>
+            <input className={inputClass} list="material-supplier-options" placeholder="请选择供应商" value={filters.supplierName} onChange={(event) => updateFilter("supplierName", event.target.value)} />
+            <datalist id="material-supplier-options">{allSupplierOptions.map((item) => <option key={item} value={item} />)}</datalist>
+          </label>
+          <label className="grid gap-1 text-xs text-gray-500">
+            <span>面辅料SKU</span>
+            <input className={inputClass} placeholder="支持模糊搜索" value={filters.materialSku} onChange={(event) => updateFilter("materialSku", event.target.value)} />
+          </label>
+          <label className="grid gap-1 text-xs text-gray-500">
+            <span>币种</span>
+            <select className={inputClass} value={filters.currency} onChange={(event) => updateFilter("currency", event.target.value as CurrencyFilter)}>
+              <option value="">全部</option><option>CNY</option><option>USD</option><option>IDR</option>
+            </select>
+          </label>
+          <label className="grid gap-1 text-xs text-gray-500">
+            <span>对账状态</span>
+            <select className={inputClass} value={filters.status} onChange={(event) => updateFilter("status", event.target.value as ReconciliationFilters["status"])}>
+              <option value="">全部</option><option>待确认</option><option>部分确认</option><option>已确认</option>
+            </select>
+          </label>
+          <div className="flex items-end gap-2">
+            <button className="inline-flex h-8 items-center gap-1 rounded bg-blue-600 px-3 text-sm text-white" onClick={applySearch}><Search size={14} />查询</button>
+            <button className="h-8 rounded border border-gray-200 px-3 text-sm" onClick={resetSearch}>重置</button>
+            <button className="inline-flex h-8 items-center gap-1 rounded border border-blue-200 px-3 text-sm text-blue-700" onClick={() => setMoreFiltersOpen((current) => !current)}>
+              {moreFiltersOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}{moreFiltersOpen ? "收起" : "展开更多"}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {moreFiltersOpen && <div className="border-b border-gray-100 bg-slate-50/60 px-3 py-2">
+        <h2 className="mb-2 text-sm font-semibold text-gray-800">更多筛选</h2>
+        <div className="grid grid-cols-1 gap-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6">
+          <label className="grid gap-1 text-xs text-gray-500"><span>来源商品采购单号</span><input className={inputClass} value={filters.sourceGoodsPurchaseNo} onChange={(event) => updateFilter("sourceGoodsPurchaseNo", event.target.value)} /></label>
+          <label className="grid gap-1 text-xs text-gray-500"><span>物料名称</span><input className={inputClass} value={filters.materialName} onChange={(event) => updateFilter("materialName", event.target.value)} /></label>
+          <label className="grid gap-1 text-xs text-gray-500"><span>物料分类</span><select className={inputClass} value={filters.materialCategory} onChange={(event) => updateFilter("materialCategory", event.target.value as ReconciliationFilters["materialCategory"])}><option value="">全部</option><option>面料</option><option>辅料</option><option>包材</option><option>耗材</option><option>纱线</option></select></label>
+          <label className="grid gap-1 text-xs text-gray-500"><span>单位</span><select className={inputClass} value={filters.unit} onChange={(event) => updateFilter("unit", event.target.value)}><option value="">全部</option>{unitOptions.map((item) => <option key={item}>{item}</option>)}</select></label>
+          <label className="grid gap-1 text-xs text-gray-500"><span>是否有差异</span><select className={inputClass} value={filters.hasDifference} onChange={(event) => updateFilter("hasDifference", event.target.value as DifferenceFilter)}><option value="">全部</option><option>有差异</option><option>无差异</option></select></label>
+          <label className="grid gap-1 text-xs text-gray-500"><span>是否已生成请款单</span><select className={inputClass} value={filters.paymentRequestGenerated} onChange={(event) => updateFilter("paymentRequestGenerated", event.target.value as YesNoFilter)}><option value="">全部</option><option>是</option><option>否</option></select></label>
+          <label className="grid gap-1 text-xs text-gray-500"><span>下单时间</span><div className="flex gap-1"><input type="date" className={`${inputClass} min-w-0 flex-1`} value={filters.orderedStart} onChange={(event) => updateFilter("orderedStart", event.target.value)} /><input type="date" className={`${inputClass} min-w-0 flex-1`} value={filters.orderedEnd} onChange={(event) => updateFilter("orderedEnd", event.target.value)} /></div></label>
+          <label className="grid gap-1 text-xs text-gray-500"><span>到货时间</span><div className="flex gap-1"><input type="date" className={`${inputClass} min-w-0 flex-1`} value={filters.arrivedStart} onChange={(event) => updateFilter("arrivedStart", event.target.value)} /><input type="date" className={`${inputClass} min-w-0 flex-1`} value={filters.arrivedEnd} onChange={(event) => updateFilter("arrivedEnd", event.target.value)} /></div></label>
+          <label className="grid gap-1 text-xs text-gray-500"><span>入库时间</span><div className="flex gap-1"><input type="date" className={`${inputClass} min-w-0 flex-1`} value={filters.inboundStart} onChange={(event) => updateFilter("inboundStart", event.target.value)} /><input type="date" className={`${inputClass} min-w-0 flex-1`} value={filters.inboundEnd} onChange={(event) => updateFilter("inboundEnd", event.target.value)} /></div></label>
+          <label className="grid gap-1 text-xs text-gray-500"><span>采购数量范围</span><div className="flex gap-1"><input type="number" className={`${inputClass} min-w-0 flex-1`} placeholder="最小值" value={filters.purchaseQtyMin} onChange={(event) => updateFilter("purchaseQtyMin", event.target.value)} /><input type="number" className={`${inputClass} min-w-0 flex-1`} placeholder="最大值" value={filters.purchaseQtyMax} onChange={(event) => updateFilter("purchaseQtyMax", event.target.value)} /></div></label>
+          <label className="grid gap-1 text-xs text-gray-500"><span>入库数量范围</span><div className="flex gap-1"><input type="number" className={`${inputClass} min-w-0 flex-1`} placeholder="最小值" value={filters.inboundQtyMin} onChange={(event) => updateFilter("inboundQtyMin", event.target.value)} /><input type="number" className={`${inputClass} min-w-0 flex-1`} placeholder="最大值" value={filters.inboundQtyMax} onChange={(event) => updateFilter("inboundQtyMax", event.target.value)} /></div></label>
+          <label className="grid gap-1 text-xs text-gray-500"><span>差异金额范围</span><div className="flex gap-1"><input type="number" className={`${inputClass} min-w-0 flex-1`} placeholder="最小值" value={filters.differenceAmountMin} onChange={(event) => updateFilter("differenceAmountMin", event.target.value)} /><input type="number" className={`${inputClass} min-w-0 flex-1`} placeholder="最大值" value={filters.differenceAmountMax} onChange={(event) => updateFilter("differenceAmountMax", event.target.value)} /></div></label>
+        </div>
+      </div>}
+
+      <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
+        <div className="flex flex-wrap gap-2">
+          <button className="h-8 rounded border border-emerald-200 px-3 text-sm text-emerald-700" onClick={batchConfirm}>批量确认</button>
+          <button className="h-8 rounded border border-amber-200 px-3 text-sm text-amber-700" onClick={batchPartialConfirm}>批量部分确认</button>
+          <button className="inline-flex h-8 items-center gap-1 rounded border border-blue-200 bg-blue-50 px-3 text-sm text-blue-700" onClick={generatePaymentRequest}><Plus size={14} />生成面辅料采购请款单</button>
+          <button className="inline-flex h-8 items-center gap-1 rounded border border-gray-200 bg-white px-3 text-sm" onClick={() => exportRows(filteredRows)}><Download size={14} />导出</button>
+          <button className="inline-flex h-8 items-center gap-1 rounded bg-[#009688] px-3 text-sm text-white" onClick={() => guardEditing() || setImportOpen(true)}><Upload size={14} />导入供应商账单</button>
+        </div>
+        <span className="text-xs text-gray-500">批量操作仅对当前勾选记录生效</span>
+      </div>
+    </section>
+
+    <section className="mb-2 border border-blue-100 bg-blue-50 px-3 py-2 text-sm text-blue-900">
+      <div><span className="font-medium">当前筛选：</span>{filterSummary}</div>
+      <div className="mt-1 text-xs text-blue-700">共筛选出 {filteredRows.length} 条记录</div>
     </section>
 
     <section className="mb-2 flex flex-wrap gap-x-7 gap-y-1 border border-gray-200 bg-white px-4 py-2 text-sm">
@@ -443,11 +660,24 @@ export default function MaterialPurchaseReconciliation({ onCreatePaymentRequest 
             <td className="min-w-[170px] px-2 py-1.5">{isEditing ? <><input className="h-6 w-full rounded border px-1 text-xs" value={editing.estimatedFee.remark} onChange={(event) => updateRemark("estimatedFee", event.target.value)} /><input className="mt-2 h-6 w-full rounded border px-1 text-xs" value={editing.actualFee.remark} onChange={(event) => updateRemark("actualFee", event.target.value)} /></> : <><div className="h-6 truncate text-gray-500" title={row.estimatedFee.remark}>{row.estimatedFee.remark || "0"}</div><div className="mt-1 h-6 truncate border-t border-dashed border-gray-200 pt-1" title={row.actualFee.remark}>{row.actualFee.remark || "0"}</div></>}</td>
             <td className="sticky right-0 min-w-[240px] border-l border-gray-200 bg-white px-2 py-2 shadow-[-4px_0_8px_rgba(15,23,42,0.04)]">{isEditing ? <div className="flex gap-4"><button className="text-blue-600" onClick={saveEditing}>保存</button><button className="text-gray-500" onClick={() => setEditing(null)}>取消</button></div> : <div className="flex gap-3 whitespace-nowrap"><button className="inline-flex items-center gap-1 text-blue-600" onClick={() => startEditing(row)}><Pencil size={13} />编辑费用</button><button className="inline-flex items-center gap-1 text-amber-600" onClick={() => guardEditing() || setPartialRow({ ...row, confirmedItems: row.confirmedItems.map((item) => ({ ...item })) })}><SlidersHorizontal size={13} />部分确认</button><button className="inline-flex items-center gap-1 text-emerald-600" onClick={() => confirmAll(row)}><Check size={13} />确认全部</button></div>}</td>
           </tr>;
-        })}</tbody>
+        })}{!filteredRows.length && <tr><td colSpan={columns.length} className="p-10 text-center text-gray-400">暂无符合条件的对账记录</td></tr>}</tbody>
       </table>
     </section>
 
     <DesignLogicCard sections={[
+      { title: "页面功能说明", headers: ["模块", "说明"], rows: [["搜索筛选区", "面辅料采购对账搜索区用于快速定位对账记录。用户可以按对账单号、面辅料采购单号、来源商品采购单号、供应商、SKU、物料名称、币种、对账状态、时间范围、金额差异等条件组合筛选。筛选结果可用于批量确认、生成面辅料采购请款单、导出或查看明细。"]] },
+      { title: "业务逻辑说明", headers: ["业务场景", "规则说明", "页面结果"], rows: [
+        ["关键词搜索", "先选择关键词类型，再输入关键词", "按指定字段查询"],
+        ["供应商筛选", "供应商为可搜索下拉框", "快速筛选某个供应商记录"],
+        ["币种筛选", "支持 CNY / USD / IDR，原 RMB 数据按 CNY 处理", "只展示对应币种记录"],
+        ["对账状态筛选", "状态分为待确认、部分确认、已确认", "按确认进度筛选"],
+        ["更多筛选", "展开后可按日期、数量、差异金额筛选", "支持复杂查询"],
+        ["是否有差异", "差异金额不为 0 即有差异", "可快速找出异常对账"],
+        ["是否已生成请款单", "判断记录是否已下推请款", "避免重复生成请款单"],
+        ["重置", "清空所有筛选条件", "恢复全部数据"],
+        ["批量操作", "勾选记录后执行确认或生成请款", "对选中记录生效"],
+        ["无数据", "没有符合条件的数据", "显示暂无符合条件记录"],
+      ] },
       { title: "页面定位", headers: ["项目", "说明"], rows: [["页面名称", "面辅料采购对账"], ["对账维度", "面辅料采购单号 + 面辅料SKU"], ["费用结构", "每条记录一行，费用字段上层预计、下层实际"], ["实际费用来源", "人工行内编辑、供应商账单 Excel 导入"]] },
       { title: "核心规则", headers: ["场景", "规则"], rows: [["预计采购货款", "优先系统金额，否则入库数量或采购数量 × 预计单价"], ["实际采购货款", "优先录入金额，否则入库数量或采购数量 × 实际单价"], ["预计最终应付", "预计采购货款 + 预计调整金额"], ["实际最终应付", "实际供应商账单金额大于 0 时优先使用，否则使用实际采购货款，再加实际调整金额"], ["差异金额", "实际最终应付 - 预计最终应付"], ["导入", "只覆盖实际费用层，不自动确认"]] },
     ]} />

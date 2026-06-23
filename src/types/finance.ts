@@ -185,6 +185,7 @@ export interface MaterialPurchaseReconciliationRow {
   actualFee: MaterialReconciliationFeeLayer;
   differenceAmount: number;
   differenceReason?: string;
+  paymentRequestGenerated?: boolean;
   confirmedBy?: string;
   confirmedAt?: string;
   confirmedItems: MaterialFeeItemConfirm[];
