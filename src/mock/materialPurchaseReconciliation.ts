@@ -17,6 +17,7 @@ const confirmItems = (confirmed: MaterialFeeItem[] = []) =>
 type Seed = {
   no: string;
   goodsNo?: string;
+  firstLegNo?: string;
   supplier: string;
   sku: string;
   name: string;
@@ -34,6 +35,11 @@ type Seed = {
   currency: Currency;
   price: number;
   bill?: number;
+  domesticLogisticsChannel?: string;
+  domesticLogisticsNo?: string;
+  domesticLogisticsFee?: number;
+  domesticLogisticsCurrency?: Currency;
+  domesticLogisticsRemark?: string;
   adjustment?: number;
   differenceReason?: string;
   adjustmentReason?: string;
@@ -43,10 +49,10 @@ type Seed = {
 };
 
 const seeds: Seed[] = [
-  { no: "ID-MP-2026-0001", goodsNo: "GP-2026-0001", supplier: "广州华盛面料有限公司", sku: "FAB-2026-0001", name: "180g纯棉针织布", spec: "白色 / 180g", unit: "米", type: "面料", purchaser: "王采购", status: "待确认", ordered: "2026-06-01", arrived: "2026-06-06", inbound: "2026-06-08", purchaseQty: 7750, arrivedQty: 7750, inboundQty: 7750, currency: "RMB", price: 0.18, remark: "首批面料" },
-  { no: "ID-MP-2026-0002", goodsNo: "GP-2026-0001", supplier: "东莞宏远辅料有限公司", sku: "ACC-2026-0002", name: "白色纽扣", spec: "白色 / 15mm", unit: "个", type: "辅料", purchaser: "李采购", status: "待确认", ordered: "2026-06-02", arrived: "2026-06-07", purchaseQty: 3352, arrivedQty: 3000, inboundQty: 0, currency: "RMB", price: 0.06, bill: 205.12, differenceReason: "供应商账单含打样费" },
-  { no: "ID-MP-2026-0003", goodsNo: "GP-2026-0002", supplier: "东莞宏远辅料有限公司", sku: "ACC-2026-0003", name: "YKK 5号尼龙拉链", spec: "黑色 / 60cm", unit: "个", type: "辅料", purchaser: "李采购", status: "已确认", ordered: "2026-06-02", arrived: "2026-06-08", inbound: "2026-06-09", purchaseQty: 6200, arrivedQty: 6150, inboundQty: 6100, currency: "RMB", price: 1.25, bill: 7600, adjustment: -25, differenceReason: "供应商按实收数量结算", adjustmentReason: "扣除破损件", paymentRequestGenerated: true, confirmed: ["采购货款", "供应商账单金额", "调整金额", "最终应付金额"] },
-  { no: "ID-MP-2026-0004", goodsNo: "GP-2026-0002", supplier: "苏州恒润包装材料有限公司", sku: "PKG-2026-0004", name: "五层出口纸箱", spec: "60×40×30", unit: "箱", type: "包材", purchaser: "陈采购", status: "已确认", ordered: "2026-06-03", arrived: "2026-06-08", inbound: "2026-06-09", purchaseQty: 1200, arrivedQty: 1200, inboundQty: 1200, currency: "RMB", price: 2.6, bill: 3120, paymentRequestGenerated: true, confirmed: ["采购货款", "调整金额"], remark: "出口包装" },
+  { no: "ID-MP-2026-0001", goodsNo: "GP-2026-0001", firstLegNo: "TB-2026-0004", supplier: "广州华盛面料有限公司", sku: "FAB-2026-0001", name: "180g纯棉针织布", spec: "白色 / 180g", unit: "米", type: "面料", purchaser: "张三", status: "已确认", ordered: "2026-06-01", arrived: "2026-06-06", inbound: "2026-06-08", purchaseQty: 7750, arrivedQty: 7750, inboundQty: 7750, currency: "RMB", price: 0.18, bill: 1427, domesticLogisticsChannel: "顺丰速运", domesticLogisticsNo: "SF2026060001", domesticLogisticsFee: 32, domesticLogisticsCurrency: "RMB", paymentRequestGenerated: true, confirmed: ["采购货款", "供应商账单金额", "调整金额", "最终应付金额"], remark: "首批面料" },
+  { no: "ID-MP-2026-0002", goodsNo: "GP-2026-0001", firstLegNo: "TB-2026-0004", supplier: "东莞宏远辅料有限公司", sku: "ACC-2026-0002", name: "白色纽扣", spec: "白色 / 15mm", unit: "个", type: "辅料", purchaser: "李四", status: "部分确认", ordered: "2026-06-02", arrived: "2026-06-07", purchaseQty: 3352, arrivedQty: 3000, inboundQty: 3000, currency: "RMB", price: 0.06, bill: 216.12, domesticLogisticsChannel: "中通快递", domesticLogisticsNo: "ZT2026060002", domesticLogisticsFee: 15, domesticLogisticsCurrency: "RMB", confirmed: ["采购货款", "供应商账单金额"] },
+  { no: "ID-MP-2026-0003", goodsNo: "GP-2026-0002", firstLegNo: "TB-2026-0004", supplier: "苏州恒润包装材料有限公司", sku: "PKG-2026-0004", name: "五层出口纸箱", spec: "60×40×30", unit: "个", type: "包材", purchaser: "王五", status: "待确认", ordered: "2026-06-03", arrived: "2026-06-08", inbound: "2026-06-09", purchaseQty: 1200, arrivedQty: 1200, inboundQty: 1200, currency: "RMB", price: 2.6, bill: 3170, domesticLogisticsChannel: "德邦物流", domesticLogisticsNo: "DB2026060004", domesticLogisticsFee: 50, domesticLogisticsCurrency: "RMB", remark: "出口包装" },
+  { no: "ID-MP-2026-0004", goodsNo: "GP-2026-0002", firstLegNo: "TB-2026-0005", supplier: "东莞宏远辅料有限公司", sku: "ACC-2026-0003", name: "YKK 5号尼龙拉链", spec: "黑色 / 60cm", unit: "个", type: "辅料", purchaser: "李采购", status: "已确认", ordered: "2026-06-02", arrived: "2026-06-08", inbound: "2026-06-09", purchaseQty: 6200, arrivedQty: 6150, inboundQty: 6100, currency: "RMB", price: 1.25, bill: 7600, adjustment: -25, domesticLogisticsChannel: "跨越速运", domesticLogisticsNo: "KY2026060003", domesticLogisticsFee: 0, differenceReason: "供应商按实收数量结算", adjustmentReason: "扣除破损件", paymentRequestGenerated: true, confirmed: ["采购货款", "供应商账单金额", "调整金额", "最终应付金额"] },
   { no: "ID-MP-2026-0005", goodsNo: "GP-2026-0004", supplier: "中山综合服饰供应链有限公司", sku: "CON-2026-0005", name: "防潮珠", spec: "5g / 包", unit: "包", type: "耗材", purchaser: "陈采购", status: "待确认", ordered: "2026-06-03", arrived: "2026-06-09", purchaseQty: 4000, arrivedQty: 3900, inboundQty: 0, currency: "RMB", price: 0.09, adjustment: 15, adjustmentReason: "加急包装费" },
   { no: "ID-MP-2026-0006", goodsNo: "GP-2026-0004", supplier: "绍兴锦达纺织有限公司", sku: "FAB-2026-0006", name: "220g涤棉卫衣布", spec: "深灰 / 220g", unit: "米", type: "面料", purchaser: "王采购", status: "部分确认", ordered: "2026-06-04", arrived: "2026-06-10", inbound: "2026-06-11", purchaseQty: 4100, arrivedQty: 4080, inboundQty: 4080, currency: "USD", price: 1.85, bill: 7560, adjustment: -20, differenceReason: "汇率尾差", adjustmentReason: "质量扣款", confirmed: ["调整金额"] },
   { no: "ID-MP-2026-0007", goodsNo: "GP-2026-0005", supplier: "义乌小料供应商", sku: "ACC-2026-0007", name: "黑色四眼纽扣", spec: "黑色 / 18mm", unit: "个", type: "辅料", purchaser: "李采购", status: "部分确认", ordered: "2026-06-04", arrived: "2026-06-09", inbound: "2026-06-10", purchaseQty: 7600, arrivedQty: 7600, inboundQty: 7600, currency: "RMB", price: 0.08, bill: 608, confirmed: ["采购货款", "调整金额"] },
@@ -59,16 +65,18 @@ export const initialMaterialPurchaseReconciliationRows: MaterialPurchaseReconcil
   const quantity = seed.inboundQty && seed.inboundQty > 0 ? seed.inboundQty : seed.purchaseQty;
   const estimatedPurchaseAmount = Number((quantity * seed.price).toFixed(2));
   const adjustmentAmount = seed.adjustment ?? 0;
+  const domesticLogisticsFee = seed.domesticLogisticsFee ?? 0;
   const actualUnitPrice = seed.bill == null ? 0 : seed.price;
   const actualPurchaseAmount = seed.bill == null ? 0 : estimatedPurchaseAmount;
   const supplierBillAmount = seed.bill ?? 0;
-  const actualFinalPayable = Number(((supplierBillAmount > 0 ? supplierBillAmount : actualPurchaseAmount) + adjustmentAmount).toFixed(2));
-  const estimatedFinalPayable = estimatedPurchaseAmount;
+  const actualFinalPayable = Number((actualPurchaseAmount + domesticLogisticsFee + adjustmentAmount).toFixed(2));
+  const estimatedFinalPayable = Number((estimatedPurchaseAmount + domesticLogisticsFee).toFixed(2));
   return {
     id: `material-rec-${index + 1}`,
     reconciliationNo: index < 4 ? `MREC-202606-${String(index + 1).padStart(4, "0")}` : undefined,
     materialPurchaseNo: seed.no,
     sourceGoodsPurchaseNo: seed.goodsNo,
+    firstLegNo: seed.firstLegNo ?? `TB-2026-${String(index + 1).padStart(4, "0")}`,
     supplierName: seed.supplier,
     materialSku: seed.sku,
     materialName: seed.name,
@@ -84,9 +92,14 @@ export const initialMaterialPurchaseReconciliationRows: MaterialPurchaseReconcil
     arrivedQty: seed.arrivedQty,
     inboundQty: seed.inboundQty,
     currency: seed.currency,
+    domesticLogisticsChannel: seed.domesticLogisticsChannel,
+    domesticLogisticsNo: seed.domesticLogisticsNo,
+    domesticLogisticsCurrency: seed.domesticLogisticsCurrency ?? seed.currency,
+    domesticLogisticsRemark: seed.domesticLogisticsRemark,
     estimatedFee: {
       unitPrice: seed.price,
       purchaseAmount: estimatedPurchaseAmount,
+      domesticLogisticsFee,
       supplierBillAmount: 0,
       adjustmentAmount: 0,
       finalPayableAmount: estimatedFinalPayable,
@@ -95,12 +108,13 @@ export const initialMaterialPurchaseReconciliationRows: MaterialPurchaseReconcil
     actualFee: {
       unitPrice: actualUnitPrice,
       purchaseAmount: actualPurchaseAmount,
+      domesticLogisticsFee,
       supplierBillAmount,
       adjustmentAmount,
       finalPayableAmount: actualFinalPayable,
       remark: seed.remark,
     },
-    differenceAmount: Number((actualFinalPayable - estimatedFinalPayable).toFixed(2)),
+    differenceAmount: Number((supplierBillAmount - actualFinalPayable).toFixed(2)),
     differenceReason: seed.differenceReason,
     paymentRequestGenerated: seed.paymentRequestGenerated ?? false,
     confirmedBy: seed.status === "已确认" ? "王采购" : undefined,

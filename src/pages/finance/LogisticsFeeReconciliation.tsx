@@ -1,5 +1,5 @@
 import { useMemo, useState, type ChangeEvent } from "react";
-import { Check, Download, FileSpreadsheet, Pencil, Plus, Search, SlidersHorizontal, Upload } from "lucide-react";
+import { Check, Download, Eye, FileSpreadsheet, Pencil, Plus, Search, SlidersHorizontal, Upload } from "lucide-react";
 import DesignLogicCard from "../../components/common/DesignLogicCard";
 import FormModal from "../../components/common/FormModal";
 import PageHeader from "../../components/common/PageHeader";
@@ -9,6 +9,7 @@ import {
   initialLogisticsReconciliationRows,
   logisticsFeeItems,
 } from "../../mock/logisticsReconciliation";
+import { getFirstLegPurchaseInfo, type FirstLegInfo } from "../../mock/firstLegPurchaseInfo";
 import type {
   LogisticsFeeDetail,
   LogisticsFeeItem,
@@ -18,7 +19,6 @@ import { parseExcelRows } from "../../utils/excelImport";
 
 type FeeKey =
   | "freightFee"
-  | "domesticLogisticsFee"
   | "firstLegLogisticsFee"
   | "customsDutyFee"
   | "vatFee"
@@ -42,8 +42,7 @@ type FeeDraft = {
 };
 
 const feeColumns: Array<{ key: FeeKey; label: LogisticsFeeItem }> = [
-  { key: "freightFee", label: "运费" },
-  { key: "domesticLogisticsFee", label: "国内物流费" },
+  { key: "freightFee", label: "头程运费" },
   { key: "firstLegLogisticsFee", label: "头程物流费" },
   { key: "customsDutyFee", label: "关税" },
   { key: "vatFee", label: "增值税" },
@@ -92,8 +91,49 @@ const statusClass = (status: string) => {
   return "bg-blue-50 text-blue-700";
 };
 
+function PurchaseInfoContent({ info }: { info: FirstLegInfo | undefined }) {
+  if (!info) return <div className="rounded border border-gray-200 bg-gray-50 p-8 text-center text-sm text-gray-500">暂无关联采购单基础信息</div>;
+  return (
+    <div className="space-y-4 text-sm">
+      <section>
+        <h3 className="mb-2 font-semibold text-gray-900">一、头程物流信息</h3>
+        <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+          {[
+            ["头程物流单号", info.firstLegNo],
+            ["头程物流商", info.provider],
+            ["头程物流渠道", info.channel],
+            ["运输方式", info.transportMethod],
+            ["头程状态", info.status],
+          ].map(([label, value]) => <div key={label} className="rounded border border-gray-100 bg-gray-50 px-3 py-2"><div className="text-xs text-gray-500">{label}</div><div className="mt-1 font-medium text-gray-900">{value}</div></div>)}
+        </div>
+      </section>
+      <section>
+        <h3 className="mb-2 font-semibold text-gray-900">二、关联采购单信息</h3>
+        <div className="overflow-x-auto border border-gray-200">
+          <table className="min-w-[1120px] text-left text-xs">
+            <thead className="bg-gray-50"><tr>{["采购单号", "采购类型", "SKU", "商品 / 物料名称", "采购数量", "采购金额", "币种", "采购人", "采购时间", "供应商", "状态"].map((item) => <th key={item} className="whitespace-nowrap border-b px-2 py-2 font-medium">{item}</th>)}</tr></thead>
+            <tbody>{info.purchases.map((item) => <tr key={item.purchaseNo} className="border-b last:border-0">
+              <td className="px-2 py-2 font-medium text-blue-600">{item.purchaseNo}</td>
+              <td className="px-2 py-2">{item.purchaseType}</td>
+              <td className="px-2 py-2">{item.sku}</td>
+              <td className="px-2 py-2">{item.itemName}</td>
+              <td className="px-2 py-2">{item.quantity}</td>
+              <td className="px-2 py-2 text-right">{money(item.amount)} {item.currency}</td>
+              <td className="px-2 py-2">{item.currency}</td>
+              <td className="px-2 py-2">{item.purchaser}</td>
+              <td className="px-2 py-2">{item.purchasedAt}</td>
+              <td className="px-2 py-2">{item.supplier}</td>
+              <td className="px-2 py-2">{item.status}</td>
+            </tr>)}</tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 const downloadTemplate = () => {
-  const sample = ["TB-2026-0001", "DHL-CN-882011", "SHP-ID-260601", "DHL Global Forwarding", "1660", "260", "1581", "460", "210", "180", "95", "0", "头程物流商账单"];
+  const sample = ["TB-2026-0004", "HHA-260604", "SHP-ID-260604", "广州城际国际货运", "1260", "1260", "360", "180", "160", "0", "0", "头程物流商账单"];
   const html = `<!doctype html><html><head><meta charset="utf-8"></head><body><table><tr>${importHeaders.map((item) => `<th>${item}</th>`).join("")}</tr><tr>${sample.map((item) => `<td>${item}</td>`).join("")}</tr></table></body></html>`;
   const url = URL.createObjectURL(new Blob([html], { type: "application/vnd.ms-excel;charset=utf-8" }));
   const link = document.createElement("a");
@@ -196,6 +236,7 @@ export default function LogisticsFeeReconciliation({
   const [importFileName, setImportFileName] = useState("");
   const [importing, setImporting] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [purchaseInfoRow, setPurchaseInfoRow] = useState<LogisticsReconciliationRow | null>(null);
 
   const showToast = (message: string) => {
     setToast(message);
@@ -401,7 +442,7 @@ export default function LogisticsFeeReconciliation({
       </section>
 
       <section className="overflow-x-auto border border-gray-200 bg-white">
-        <table className="min-w-[2180px] text-left text-xs">
+        <table className="min-w-[2100px] text-left text-xs">
           <thead className="sticky top-0 z-10 bg-gray-50 text-gray-700">
             <tr>
               {["选择", "头程物流单信息", "头程物流商 / 渠道", "运输信息", ...feeColumns.map((item) => item.label), "费用合计", "差异", "确认状态", "操作"].map((title) => (
@@ -460,11 +501,12 @@ export default function LogisticsFeeReconciliation({
                     <button className="inline-flex items-center gap-1 text-amber-600 hover:text-amber-800" onClick={() => editing ? showToast("请先保存或取消当前编辑") : setConfirming(row)}><SlidersHorizontal size={13} />部分确认</button>
                     <button className="inline-flex items-center gap-1 text-emerald-600 hover:text-emerald-800" onClick={() => confirmAll(row)}><Check size={13} />确认全部</button>
                     <button className={`inline-flex items-center gap-1 ${row.confirmStatus === "已确认" ? "text-blue-600 hover:text-blue-800" : "text-gray-400"}`} disabled={row.confirmStatus !== "已确认"} onClick={() => generatePaymentRequest([row])}><Plus size={13} />生成请款单</button>
+                    <button className="inline-flex items-center gap-1 text-indigo-600 hover:text-indigo-800" onClick={() => setPurchaseInfoRow(row)}><Eye size={13} />查看采购信息</button>
                   </div>}
                 </td>
               </tr>
             );})}
-            {!filteredRows.length && <tr><td colSpan={16} className="py-12 text-center text-gray-400">暂无符合条件的物流单</td></tr>}
+            {!filteredRows.length && <tr><td colSpan={15} className="py-12 text-center text-gray-400">暂无符合条件的物流单</td></tr>}
           </tbody>
         </table>
       </section>
@@ -492,6 +534,10 @@ export default function LogisticsFeeReconciliation({
         </div>}
       </FormModal>
 
+      <FormModal open={Boolean(purchaseInfoRow)} onClose={() => setPurchaseInfoRow(null)} title="相关采购单基础信息" widthClass="w-[1180px]" sectionTitle="采购信息">
+        <PurchaseInfoContent info={getFirstLegPurchaseInfo(purchaseInfoRow?.firstLegNo)} />
+      </FormModal>
+
       <FormModal open={importOpen} onClose={() => setImportOpen(false)} title="导入头程物流实际费用" widthClass="w-[1120px]">
         <div className="space-y-3 text-sm">
           <div className="rounded border border-blue-100 bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-800">以头程物流单号匹配系统记录。导入会覆盖该单现有实际费用，不影响预计费用和已确认结果，未填写的费用项按 0 处理。</div>
@@ -515,7 +561,7 @@ export default function LogisticsFeeReconciliation({
                   {feeColumns.map((column) => <td key={column.key} className="px-2 py-2 text-right">{money(row.values[column.key])}</td>)}
                   <td className="px-2 py-2">{row.remark || "-"}</td>
                 </tr>)}
-                {!importRows.length && <tr><td colSpan={15} className="p-10 text-center text-gray-400">下载模板并上传头程物流商实际费用文件后，在此预览校验结果。</td></tr>}
+                {!importRows.length && <tr><td colSpan={14} className="p-10 text-center text-gray-400">下载模板并上传头程物流商实际费用文件后，在此预览校验结果。</td></tr>}
               </tbody>
             </table>
           </div>
@@ -528,20 +574,18 @@ export default function LogisticsFeeReconciliation({
           title: "页面功能说明",
           headers: ["说明项", "内容"],
           rows: [
-            ["采购对账模块", "采购对账模块当前保留面辅料采购对账、物流费用对账和物流费用请款。物流费用对账中的头程物流商筛选项来自头程物流商管理，用于按物流商筛选费用对账记录。系统中申请人、请款人、操作人等人员字段统一显示真实姓名，不再显示“当前用户”。"],
+            ["本次调整", "本次调整将国内物流费用从物流费用对账调整到面辅料采购对账中，因为国内物流费用通常属于面辅料供应商发货阶段产生的费用。物流费用对账只保留头程物流商 / 货代相关费用，并支持查看相关采购单基础信息，用于追溯头程物流费用对应了哪些采购单、SKU、采购金额和采购人。"],
           ],
         },
         {
           title: "业务逻辑说明",
           headers: ["业务场景", "规则说明", "页面结果"],
           rows: [
-            ["菜单精简", "删除应付明细池、对账单管理、付款记录入口", "左侧采购对账菜单更简洁"],
-            ["删除无效 Tab", "已删除模块不应继续作为顶部 Tab 打开", "页面不再出现无效功能入口"],
-            ["人员名称展示", "不再显示“当前用户”", "申请人、请款人、操作人显示具体姓名"],
-            ["头程物流商筛选", "货代字段改为头程物流商下拉", "用户可从物流商列表中选择"],
-            ["枚举来源", "头程物流商下拉来自头程物流商管理", "筛选项与物流商档案保持一致"],
-            ["查询筛选", "选择头程物流商后点击查询", "列表只显示对应物流商记录"],
-            ["字段统一", "物流费用对账中统一叫头程物流商", "避免货代、物流商、承运商混用"],
+            ["国内物流费用归属", "国内物流费用由供应商发货产生", "调整到面辅料采购对账"],
+            ["物流费用对账", "只保留头程物流商 / 货代相关费用", "不再展示国内物流费用"],
+            ["费用字段", "保留头程运费、关税、增值税、清关费、附加费、报关费", "费用合计只计算头程物流相关费用"],
+            ["查看采购信息", "物流费用对账可查看关联采购单", "方便核对头程费用对应哪些采购"],
+            ["费用拆分", "国内物流费用与头程物流费用分开", "避免供应商费用和货代费用混淆"],
           ],
         },
       ]} />

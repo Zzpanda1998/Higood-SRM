@@ -24,6 +24,7 @@ import SamplePurchaseOrder from "./pages/product-purchase/SamplePurchaseOrder";
 import MaterialRequirementAnalysis from "./pages/material-purchase/MaterialRequirementAnalysis";
 import IdMaterialPurchaseOrder from "./pages/material-purchase/IdMaterialPurchaseOrder";
 import MaterialPurchaseTracking, { createMaterialLogisticsRows } from "./pages/material-purchase/MaterialPurchaseTracking";
+import MaterialSupplierConfirmation from "./pages/material-purchase/MaterialSupplierConfirmation";
 import type { JoinHeadLogisticsPayload } from "./pages/material-purchase/JoinHeadLogisticsModal";
 import TransferBatchManagement from "./pages/material-purchase/TransferBatchManagement";
 import FirstLegCarrierManagement from "./pages/material-purchase/FirstLegCarrierManagement";
@@ -71,7 +72,7 @@ const staticViews: Record<string, ReactElement> = {
 };
 
 const reconciliationViews = new Set<ReconciliationView>(["面辅料采购对账", "物流费用对账"]);
-const dynamicViewKeys = new Set(["商品采购建议", "KOL采购需求", "面辅料采购单", "面辅料采购跟踪", "头程物流", "头程物流商管理", "面辅料采购请款", "面辅料采购请款单 - 新建", "物流费用请款", "物流费用请款单 - 新建", ...reconciliationViews]);
+const dynamicViewKeys = new Set(["商品采购建议", "KOL采购需求", "面辅料采购单", "面辅料采购跟踪", "面辅料供应商确认单", "头程物流", "头程物流商管理", "面辅料采购请款", "面辅料采购请款单 - 新建", "物流费用请款", "物流费用请款单 - 新建", ...reconciliationViews]);
 const normalizeViewKey = (key: string) => {
   if (key === "供应商管理") return "商品供应商管理";
   if (key === "成衣 / 样衣列表") return "成衣列表";
@@ -207,6 +208,9 @@ export default function App() {
     }
     if (active === "面辅料采购跟踪") {
       return <MaterialPurchaseTracking onCreateTransferBatch={createTransferBatchFromLogistics} records={materialLogisticsRecords} transferBatches={transferBatches} />;
+    }
+    if (active === "面辅料供应商确认单") {
+      return <MaterialSupplierConfirmation />;
     }
     if (active === "头程物流") {
       return <TransferBatchManagement batches={transferBatches} setBatches={setTransferBatches} availableRecords={materialLogisticsRecords} targetBatchNo={targetFirstLegNo} onTargetHandled={() => setTargetFirstLegNo("")} carriers={firstLegCarriers} channels={firstLegCarrierChannels} />;

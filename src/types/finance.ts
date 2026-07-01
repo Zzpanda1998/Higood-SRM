@@ -91,7 +91,7 @@ export interface PaymentRecord {
 export type StatementDoc = Record<string, string | number>;
 
 export type LogisticsConfirmStatus = "未确认" | "部分确认" | "已确认";
-export type LogisticsFeeItem = "运费" | "国内物流费" | "头程物流费" | "关税" | "增值税" | "清关费" | "附加费" | "报关费";
+export type LogisticsFeeItem = "头程运费" | "头程物流费" | "关税" | "增值税" | "清关费" | "附加费" | "报关费";
 
 export interface LogisticsFeeDetail {
   feeType: "预计" | "实际";
@@ -148,6 +148,7 @@ export type MaterialFeeItem = "采购货款" | "供应商账单金额" | "调整
 export interface MaterialReconciliationFeeLayer {
   unitPrice: number;
   purchaseAmount: number;
+  domesticLogisticsFee?: number;
   supplierBillAmount: number;
   adjustmentAmount: number;
   finalPayableAmount: number;
@@ -166,6 +167,7 @@ export interface MaterialPurchaseReconciliationRow {
   reconciliationNo?: string;
   materialPurchaseNo: string;
   sourceGoodsPurchaseNo?: string;
+  firstLegNo?: string;
   supplierName: string;
   materialSku: string;
   materialName: string;
@@ -181,6 +183,10 @@ export interface MaterialPurchaseReconciliationRow {
   arrivedQty?: number;
   inboundQty?: number;
   currency: Currency;
+  domesticLogisticsChannel?: string;
+  domesticLogisticsNo?: string;
+  domesticLogisticsCurrency?: Currency;
+  domesticLogisticsRemark?: string;
   estimatedFee: MaterialReconciliationFeeLayer;
   actualFee: MaterialReconciliationFeeLayer;
   differenceAmount: number;

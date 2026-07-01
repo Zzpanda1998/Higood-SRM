@@ -15,7 +15,7 @@ import type {
 } from "../../types/finance";
 import { parseExcelRows } from "../../utils/excelImport";
 
-type FeeKey = "unitPrice" | "purchaseAmount" | "supplierBillAmount" | "adjustmentAmount";
+type FeeKey = "unitPrice" | "purchaseAmount" | "domesticLogisticsFee" | "supplierBillAmount" | "adjustmentAmount";
 type FeeDraft = {
   rowId: string;
   estimatedFee: Record<FeeKey, string> & { remark: string };
@@ -29,12 +29,13 @@ type ImportPreviewRow = {
   supplierName: string;
   actualUnitPrice: number;
   actualPurchaseAmount: number;
+  actualDomesticLogisticsFee: number;
   actualSupplierBillAmount: number;
   actualAdjustmentAmount: number;
   remark: string;
   errors: string[];
 };
-type KeywordType = "reconciliationNo" | "materialPurchaseNo" | "sourceGoodsPurchaseNo" | "materialSku" | "materialName" | "supplierName";
+type KeywordType = "reconciliationNo" | "materialPurchaseNo" | "sourceGoodsPurchaseNo" | "firstLegNo" | "materialSku" | "materialName" | "supplierName";
 type CurrencyFilter = "" | "CNY" | "USD" | "IDR";
 type DifferenceFilter = "" | "有差异" | "无差异";
 type YesNoFilter = "" | "是" | "否";
@@ -45,6 +46,7 @@ type ReconciliationFilters = {
   materialSku: string;
   currency: CurrencyFilter;
   status: "" | MaterialPurchaseConfirmStatus;
+  firstLegNo: string;
   sourceGoodsPurchaseNo: string;
   materialName: string;
   materialCategory: "" | MaterialPurchaseType;
@@ -66,8 +68,9 @@ type ReconciliationFilters = {
 };
 
 const feeColumns: Array<{ key: FeeKey; label: string; allowNegative?: boolean }> = [
-  { key: "unitPrice", label: "采购单价" },
+  { key: "unitPrice", label: "实际采购单价" },
   { key: "purchaseAmount", label: "采购货款" },
+  { key: "domesticLogisticsFee", label: "国内物流费用" },
   { key: "supplierBillAmount", label: "供应商账单金额" },
   { key: "adjustmentAmount", label: "调整金额", allowNegative: true },
 ];
@@ -82,6 +85,7 @@ const defaultFilters: ReconciliationFilters = {
   materialSku: "",
   currency: "",
   status: "",
+  firstLegNo: "",
   sourceGoodsPurchaseNo: "",
   materialName: "",
   materialCategory: "",
@@ -105,6 +109,7 @@ const keywordOptions: Array<{ value: KeywordType; label: string }> = [
   { value: "reconciliationNo", label: "对账单号" },
   { value: "materialPurchaseNo", label: "面辅料采购单号" },
   { value: "sourceGoodsPurchaseNo", label: "来源商品采购单号" },
+  { value: "firstLegNo", label: "头程物流单号" },
   { value: "materialSku", label: "面辅料SKU" },
   { value: "materialName", label: "物料名称" },
   { value: "supplierName", label: "供应商名称" },
@@ -119,6 +124,7 @@ function normalizeFeeValue(value: unknown): number {
 
 const money = (value: unknown) => normalizeFeeValue(value).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const quantity = (value?: number) => normalizeFeeValue(value).toLocaleString("zh-CN", { maximumFractionDigits: 2 });
+const displayCurrency = (currency?: Currency) => currency === "RMB" ? "CNY" : currency ?? "CNY";
 const statusClass = (status: string) => status === "已确认" ? "bg-emerald-50 text-emerald-700" : status === "部分确认" ? "bg-amber-50 text-amber-700" : "bg-blue-50 text-blue-700";
 const baseQuantity = (row: MaterialPurchaseReconciliationRow) => row.inboundQty && row.inboundQty > 0 ? row.inboundQty : row.purchaseQty;
 const currencyFilterValue = (currency: Currency): CurrencyFilter => currency === "RMB" ? "CNY" : currency;
@@ -135,6 +141,7 @@ const getKeywordValue = (row: MaterialPurchaseReconciliationRow, keywordType: Ke
     reconciliationNo: row.reconciliationNo,
     materialPurchaseNo: row.materialPurchaseNo,
     sourceGoodsPurchaseNo: row.sourceGoodsPurchaseNo,
+    firstLegNo: row.firstLegNo,
     materialSku: row.materialSku,
     materialName: row.materialName,
     supplierName: row.supplierName,
@@ -151,6 +158,7 @@ function filterRows(rows: MaterialPurchaseReconciliationRow[], filters: Reconcil
       && (!filters.materialSku || includesText(row.materialSku, filters.materialSku))
       && (!filters.currency || currencyFilterValue(row.currency) === filters.currency)
       && (!filters.status || row.status === filters.status)
+      && (!filters.firstLegNo || includesText(row.firstLegNo, filters.firstLegNo))
       && (!filters.sourceGoodsPurchaseNo || includesText(row.sourceGoodsPurchaseNo, filters.sourceGoodsPurchaseNo))
       && (!filters.materialName || includesText(row.materialName, filters.materialName))
       && (!filters.materialCategory || row.purchaseType === filters.materialCategory)
@@ -174,6 +182,7 @@ function summarizeFilters(filters: ReconciliationFilters) {
   if (filters.materialSku) items.push(`面辅料SKU=${filters.materialSku}`);
   if (filters.currency) items.push(`币种=${filters.currency}`);
   if (filters.status) items.push(`对账状态=${filters.status}`);
+  if (filters.firstLegNo) items.push(`头程物流单号 = ${filters.firstLegNo}`);
   if (filters.sourceGoodsPurchaseNo) items.push(`来源商品采购单号=${filters.sourceGoodsPurchaseNo}`);
   if (filters.materialName) items.push(`物料名称=${filters.materialName}`);
   if (filters.materialCategory) items.push(`物料分类=${filters.materialCategory}`);
@@ -198,15 +207,16 @@ function calculateLayer(
   const unitPrice = normalizeFeeValue(values.unitPrice ?? previous.unitPrice);
   const explicitPurchase = values.purchaseAmount === undefined ? previous.purchaseAmount : normalizeFeeValue(values.purchaseAmount);
   const purchaseAmount = explicitPurchase > 0 ? explicitPurchase : Number((baseQuantity(row) * unitPrice).toFixed(2));
+  const domesticLogisticsFee = normalizeFeeValue(values.domesticLogisticsFee ?? previous.domesticLogisticsFee);
   const supplierBillAmount = normalizeFeeValue(values.supplierBillAmount ?? previous.supplierBillAmount);
   const adjustmentAmount = normalizeFeeValue(values.adjustmentAmount ?? previous.adjustmentAmount);
-  const payableBase = kind === "actual" && supplierBillAmount > 0 ? supplierBillAmount : purchaseAmount;
   return {
     unitPrice,
     purchaseAmount,
+    domesticLogisticsFee,
     supplierBillAmount,
     adjustmentAmount,
-    finalPayableAmount: Number((payableBase + adjustmentAmount).toFixed(2)),
+    finalPayableAmount: Number((purchaseAmount + domesticLogisticsFee + adjustmentAmount).toFixed(2)),
     remark: values.remark ?? previous.remark ?? "",
   };
 }
@@ -222,14 +232,14 @@ function withCalculatedFees(
     ...row,
     estimatedFee,
     actualFee,
-    differenceAmount: Number((actualFee.finalPayableAmount - estimatedFee.finalPayableAmount).toFixed(2)),
+    differenceAmount: Number((actualFee.supplierBillAmount - actualFee.finalPayableAmount).toFixed(2)),
   };
 }
 
-const importHeaders = ["面辅料采购单号", "面辅料SKU", "供应商", "实际采购单价", "实际采购货款", "实际供应商账单金额", "实际调整金额", "备注"];
+const importHeaders = ["面辅料采购单号", "面辅料SKU", "供应商", "实际采购单价", "实际采购货款", "实际国内物流费用", "实际供应商账单金额", "实际调整金额", "备注"];
 
 const downloadTemplate = () => {
-  const sample = ["ID-MP-2026-0001", "FAB-2026-0001", "广州华盛面料有限公司", "0.20", "1550", "1560", "10", "六月账单"];
+  const sample = ["ID-MP-2026-0001", "FAB-2026-0001", "广州华盛面料有限公司", "0.18", "1395", "32", "1427", "0", "六月账单"];
   const html = `<!doctype html><html><head><meta charset="utf-8"></head><body><table><tr>${importHeaders.map((item) => `<th>${item}</th>`).join("")}</tr><tr>${sample.map((item) => `<td>${item}</td>`).join("")}</tr></table></body></html>`;
   const url = URL.createObjectURL(new Blob([html], { type: "application/vnd.ms-excel;charset=utf-8" }));
   const link = document.createElement("a");
@@ -240,8 +250,8 @@ const downloadTemplate = () => {
 };
 
 const exportRows = (rows: MaterialPurchaseReconciliationRow[]) => {
-  const headers = ["面辅料采购单号", "面辅料SKU", "供应商", "币种", "预计采购货款", "实际采购货款", "预计最终应付", "实际最终应付", "差异", "状态"];
-  const body = rows.map((row) => [row.materialPurchaseNo, row.materialSku, row.supplierName, row.currency, row.estimatedFee.purchaseAmount, row.actualFee.purchaseAmount, row.estimatedFee.finalPayableAmount, row.actualFee.finalPayableAmount, row.differenceAmount, row.status]);
+  const headers = ["面辅料采购单号", "来源商品采购单号", "头程物流单号", "面辅料SKU", "供应商", "币种", "实际采购货款", "国内物流费用", "实际最终应付", "差异", "状态"];
+  const body = rows.map((row) => [row.materialPurchaseNo, row.sourceGoodsPurchaseNo ?? "", row.firstLegNo ?? "", row.materialSku, row.supplierName, displayCurrency(row.currency), row.actualFee.purchaseAmount, row.actualFee.domesticLogisticsFee ?? 0, row.actualFee.finalPayableAmount, row.differenceAmount, row.status]);
   const csv = [headers, ...body].map((line) => line.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(",")).join("\r\n");
   const url = URL.createObjectURL(new Blob([`\ufeff${csv}`], { type: "text/csv;charset=utf-8" }));
   const link = document.createElement("a");
@@ -320,7 +330,7 @@ export default function MaterialPurchaseReconciliation({ onCreatePaymentRequest 
         currency: item,
         value: filteredRows.filter((row) => row.currency === item).reduce((sum, row) => sum + selector(row), 0),
       }));
-    const format = (items: Array<{ currency: Currency; value: number }>) => items.map((item) => `${item.currency} ${money(item.value)}`).join(" / ");
+    const format = (items: Array<{ currency: Currency; value: number }>) => items.map((item) => `${displayCurrency(item.currency)} ${money(item.value)}`).join(" / ");
     return {
       estimatedPurchase: format(currencyTotals((row) => row.estimatedFee.purchaseAmount)),
       actualPurchase: format(currencyTotals((row) => row.actualFee.purchaseAmount)),
@@ -487,6 +497,7 @@ export default function MaterialPurchaseReconciliation({ onCreatePaymentRequest 
           supplierName: get("供应商"),
           actualUnitPrice: parseAmount("实际采购单价"),
           actualPurchaseAmount: parseAmount("实际采购货款"),
+          actualDomesticLogisticsFee: parseAmount("实际国内物流费用"),
           actualSupplierBillAmount: parseAmount("实际供应商账单金额"),
           actualAdjustmentAmount: parseAmount("实际调整金额", true),
           remark: get("备注"),
@@ -512,6 +523,7 @@ export default function MaterialPurchaseReconciliation({ onCreatePaymentRequest 
       return withCalculatedFees(row, row.estimatedFee, {
         unitPrice: item.actualUnitPrice,
         purchaseAmount: item.actualPurchaseAmount,
+        domesticLogisticsFee: item.actualDomesticLogisticsFee,
         supplierBillAmount: item.actualSupplierBillAmount,
         adjustmentAmount: item.actualAdjustmentAmount,
         finalPayableAmount: 0,
@@ -524,7 +536,7 @@ export default function MaterialPurchaseReconciliation({ onCreatePaymentRequest 
     setImportOpen(false);
   };
 
-  const columns = ["", "面辅料采购单号", "来源商品采购单号", "供应商", "面辅料SKU", "物料名称", "规格 / 颜色", "单位", "采购类型", "采购员", "状态", "下单时间", "到货时间", "入库时间", "采购数量", "到货数量", "入库数量", "币种", "费用类型", ...feeColumns.map((item) => item.label), "最终应付金额", "差异金额", "备注", "操作"];
+  const columns = ["", "面辅料采购单号", "来源商品采购单号", "头程物流单号", "供应商", "面辅料SKU", "物料名称", "规格 / 颜色", "单位", "采购类型", "采购员", "状态", "下单时间", "到货时间", "入库时间", "采购数量", "到货数量", "入库数量", "币种", "国内物流渠道", "国内物流单号", "国内物流币种", "费用类型", ...feeColumns.map((item) => item.label), "最终应付金额", "差异金额", "国内物流备注 / 备注", "操作"];
 
   return <div>
     <PageHeader
@@ -538,7 +550,7 @@ export default function MaterialPurchaseReconciliation({ onCreatePaymentRequest 
           <h2 className="text-sm font-semibold text-gray-800">基础筛选</h2>
           <span className="text-xs text-gray-400">填写条件后点击查询，表格按当前查询条件刷新</span>
         </div>
-        <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-[150px_220px_240px_170px_110px_130px_auto]">
+        <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-[150px_210px_190px_230px_160px_100px_120px_auto]">
           <label className="grid gap-1 text-xs text-gray-500">
             <span>关键词类型</span>
             <select className={inputClass} value={filters.keywordType} onChange={(event) => updateFilter("keywordType", event.target.value as KeywordType)}>
@@ -553,6 +565,10 @@ export default function MaterialPurchaseReconciliation({ onCreatePaymentRequest 
             <span>供应商</span>
             <input className={inputClass} list="material-supplier-options" placeholder="请选择供应商" value={filters.supplierName} onChange={(event) => updateFilter("supplierName", event.target.value)} />
             <datalist id="material-supplier-options">{allSupplierOptions.map((item) => <option key={item} value={item} />)}</datalist>
+          </label>
+          <label className="grid gap-1 text-xs text-gray-500">
+            <span>头程物流单号</span>
+            <input className={inputClass} placeholder="请输入头程物流单号" value={filters.firstLegNo} onChange={(event) => updateFilter("firstLegNo", event.target.value)} />
           </label>
           <label className="grid gap-1 text-xs text-gray-500">
             <span>面辅料SKU</span>
@@ -612,7 +628,7 @@ export default function MaterialPurchaseReconciliation({ onCreatePaymentRequest 
 
     <section className="mb-2 border border-blue-100 bg-blue-50 px-3 py-2 text-sm text-blue-900">
       <div><span className="font-medium">当前筛选：</span>{filterSummary}</div>
-      <div className="mt-1 text-xs text-blue-700">共筛选出 {filteredRows.length} 条记录</div>
+      <div className="mt-1 text-xs text-blue-700">共筛选出 {filteredRows.length} 条面辅料采购对账记录</div>
     </section>
 
     <section className="mb-2 flex flex-wrap gap-x-7 gap-y-1 border border-gray-200 bg-white px-4 py-2 text-sm">
@@ -630,7 +646,7 @@ export default function MaterialPurchaseReconciliation({ onCreatePaymentRequest 
     </section>
 
     <section className="overflow-x-auto border border-gray-200 bg-white">
-      <table className="min-w-[3300px] text-left text-xs">
+      <table className="min-w-[3820px] text-left text-xs">
         <thead className="sticky top-0 z-10 bg-gray-50 text-gray-700"><tr>{columns.map((column, index) => <th key={`${column}-${index}`} className={`whitespace-nowrap border-b border-r border-gray-200 px-2 py-2 font-medium ${index === columns.length - 1 ? "sticky right-0 z-20 bg-gray-50" : ""}`}>{index === 0 ? <input type="checkbox" aria-label="全选当前列表" checked={filteredRows.length > 0 && filteredRows.every((row) => selected.includes(row.id))} onChange={(event) => setSelected(event.target.checked ? filteredRows.map((row) => row.id) : [])} /> : column}</th>)}</tr></thead>
         <tbody>{filteredRows.map((row) => {
           const isEditing = editing?.rowId === row.id;
@@ -638,6 +654,7 @@ export default function MaterialPurchaseReconciliation({ onCreatePaymentRequest 
             <td className="px-2 py-2 text-center"><input type="checkbox" checked={selected.includes(row.id)} onChange={(event) => setSelected((current) => event.target.checked ? [...current, row.id] : current.filter((id) => id !== row.id))} /></td>
             <td className="whitespace-nowrap px-2 py-2 font-medium text-blue-600">{row.materialPurchaseNo}</td>
             <td className="whitespace-nowrap px-2 py-2">{row.sourceGoodsPurchaseNo || "-"}</td>
+            <td className="whitespace-nowrap px-2 py-2 font-medium text-blue-600">{row.firstLegNo || "-"}</td>
             <td className="min-w-[190px] px-2 py-2">{row.supplierName}</td>
             <td className="whitespace-nowrap px-2 py-2 font-medium">{row.materialSku}</td>
             <td className="min-w-[150px] px-2 py-2">{row.materialName}</td>
@@ -652,34 +669,35 @@ export default function MaterialPurchaseReconciliation({ onCreatePaymentRequest 
             <td className="px-2 py-2 text-right">{quantity(row.purchaseQty)}</td>
             <td className="px-2 py-2 text-right">{quantity(row.arrivedQty)}</td>
             <td className="px-2 py-2 text-right">{quantity(row.inboundQty)}</td>
-            <td className="px-2 py-2">{row.currency}</td>
+            <td className="px-2 py-2">{displayCurrency(row.currency)}</td>
+            <td className="whitespace-nowrap px-2 py-2">{row.domesticLogisticsChannel || "-"}</td>
+            <td className="whitespace-nowrap px-2 py-2 text-blue-600">{row.domesticLogisticsNo || "-"}</td>
+            <td className="px-2 py-2">{displayCurrency(row.domesticLogisticsCurrency)}</td>
             <td className="min-w-[70px] px-2 py-1.5"><div className="flex h-6 items-center"><span className="rounded bg-slate-100 px-1 text-[10px] text-gray-500">预计</span></div><div className="mt-1 flex h-6 items-center border-t border-dashed border-gray-200 pt-1"><span className="rounded bg-blue-50 px-1 text-[10px] text-blue-600">实际</span></div></td>
             {feeColumns.map((column) => <LayerCell key={column.key} row={row} feeKey={column.key} draft={editing} onChange={updateDraft} />)}
             <td className="min-w-[120px] border-l border-gray-100 px-2 py-1.5 text-right"><div className="flex h-6 items-center justify-between text-gray-500"><span className="text-[10px]">预计</span><b>{money(row.estimatedFee.finalPayableAmount)}</b></div><div className="mt-1 flex h-6 items-center justify-between border-t border-dashed border-gray-200 pt-1"><span className="text-[10px] text-blue-600">实际</span><b>{money(row.actualFee.finalPayableAmount)}</b></div></td>
             <td className="min-w-[100px] px-2 py-1.5 text-right"><div className="flex h-6 items-center justify-between text-gray-500"><span className="text-[10px]">预计</span><span>{money(0)}</span></div><div className={`mt-1 flex h-6 items-center justify-between border-t border-dashed border-gray-200 pt-1 font-semibold ${row.differenceAmount > 0 ? "text-red-600" : row.differenceAmount < 0 ? "text-emerald-600" : "text-gray-700"}`}><span className="text-[10px]">实际</span><span>{row.differenceAmount > 0 ? "+" : ""}{money(row.differenceAmount)}</span></div></td>
-            <td className="min-w-[170px] px-2 py-1.5">{isEditing ? <><input className="h-6 w-full rounded border px-1 text-xs" value={editing.estimatedFee.remark} onChange={(event) => updateRemark("estimatedFee", event.target.value)} /><input className="mt-2 h-6 w-full rounded border px-1 text-xs" value={editing.actualFee.remark} onChange={(event) => updateRemark("actualFee", event.target.value)} /></> : <><div className="h-6 truncate text-gray-500" title={row.estimatedFee.remark}>{row.estimatedFee.remark || "0"}</div><div className="mt-1 h-6 truncate border-t border-dashed border-gray-200 pt-1" title={row.actualFee.remark}>{row.actualFee.remark || "0"}</div></>}</td>
+            <td className="min-w-[190px] px-2 py-1.5">{isEditing ? <><input className="h-6 w-full rounded border px-1 text-xs" value={editing.estimatedFee.remark} onChange={(event) => updateRemark("estimatedFee", event.target.value)} /><input className="mt-2 h-6 w-full rounded border px-1 text-xs" value={editing.actualFee.remark} onChange={(event) => updateRemark("actualFee", event.target.value)} /></> : <><div className="h-6 truncate text-gray-500" title={row.domesticLogisticsRemark || row.estimatedFee.remark}>{row.domesticLogisticsRemark || row.estimatedFee.remark || "0"}</div><div className="mt-1 h-6 truncate border-t border-dashed border-gray-200 pt-1" title={row.actualFee.remark}>{row.actualFee.remark || "0"}</div></>}</td>
             <td className="sticky right-0 min-w-[240px] border-l border-gray-200 bg-white px-2 py-2 shadow-[-4px_0_8px_rgba(15,23,42,0.04)]">{isEditing ? <div className="flex gap-4"><button className="text-blue-600" onClick={saveEditing}>保存</button><button className="text-gray-500" onClick={() => setEditing(null)}>取消</button></div> : <div className="flex gap-3 whitespace-nowrap"><button className="inline-flex items-center gap-1 text-blue-600" onClick={() => startEditing(row)}><Pencil size={13} />编辑费用</button><button className="inline-flex items-center gap-1 text-amber-600" onClick={() => guardEditing() || setPartialRow({ ...row, confirmedItems: row.confirmedItems.map((item) => ({ ...item })) })}><SlidersHorizontal size={13} />部分确认</button><button className="inline-flex items-center gap-1 text-emerald-600" onClick={() => confirmAll(row)}><Check size={13} />确认全部</button></div>}</td>
           </tr>;
-        })}{!filteredRows.length && <tr><td colSpan={columns.length} className="p-10 text-center text-gray-400">暂无符合条件的对账记录</td></tr>}</tbody>
+        })}{!filteredRows.length && <tr><td colSpan={columns.length} className="p-10 text-center text-gray-400">{appliedFilters.firstLegNo ? "暂无该头程物流单关联的面辅料采购对账记录" : "暂无符合条件的对账记录"}</td></tr>}</tbody>
       </table>
     </section>
 
     <DesignLogicCard sections={[
-      { title: "页面功能说明", headers: ["模块", "说明"], rows: [["搜索筛选区", "面辅料采购对账搜索区用于快速定位对账记录。用户可以按对账单号、面辅料采购单号、来源商品采购单号、供应商、SKU、物料名称、币种、对账状态、时间范围、金额差异等条件组合筛选。筛选结果可用于批量确认、生成面辅料采购请款单、导出或查看明细。"]] },
+      { title: "页面功能说明", headers: ["模块", "说明"], rows: [["本次调整", "本次调整将国内物流费用从物流费用对账调整到面辅料采购对账中，因为国内物流费用通常属于面辅料供应商发货阶段产生的费用。面辅料采购对账支持按头程物流单号搜索，方便业务方将同一个头程物流单下的面辅料采购记录一起筛选出来对账。物流费用对账和物流费用请款支持查看相关采购单基础信息，用于追溯头程物流费用对应了哪些采购单、SKU、采购金额和采购人。"]] },
       { title: "业务逻辑说明", headers: ["业务场景", "规则说明", "页面结果"], rows: [
-        ["关键词搜索", "先选择关键词类型，再输入关键词", "按指定字段查询"],
-        ["供应商筛选", "供应商为可搜索下拉框", "快速筛选某个供应商记录"],
-        ["币种筛选", "支持 CNY / USD / IDR，原 RMB 数据按 CNY 处理", "只展示对应币种记录"],
-        ["对账状态筛选", "状态分为待确认、部分确认、已确认", "按确认进度筛选"],
-        ["更多筛选", "展开后可按日期、数量、差异金额筛选", "支持复杂查询"],
-        ["是否有差异", "差异金额不为 0 即有差异", "可快速找出异常对账"],
-        ["是否已生成请款单", "判断记录是否已下推请款", "避免重复生成请款单"],
-        ["重置", "清空所有筛选条件", "恢复全部数据"],
-        ["批量操作", "勾选记录后执行确认或生成请款", "对选中记录生效"],
-        ["无数据", "没有符合条件的数据", "显示暂无符合条件记录"],
+        ["国内物流费用归属", "国内物流费用由供应商发货产生", "调整到面辅料采购对账"],
+        ["物流费用对账", "只保留头程物流商 / 货代相关费用", "不再展示国内物流费用"],
+        ["面辅料采购对账", "增加国内物流费用字段", "最终应付金额包含国内物流费用"],
+        ["头程物流单号搜索", "业务方可输入头程物流单号", "搜出该头程单下所有面辅料采购对账记录"],
+        ["批量对账", "搜索出同一头程物流单后可批量确认", "提升同批次对账效率"],
+        ["查看采购信息", "物流费用对账可查看关联采购单", "方便核对头程费用对应哪些采购"],
+        ["物流请款追溯", "物流费用请款可查看关联采购信息", "付款时能追溯采购单、SKU、金额和采购人"],
+        ["费用拆分", "国内物流费用与头程物流费用分开", "避免供应商费用和货代费用混淆"],
       ] },
       { title: "页面定位", headers: ["项目", "说明"], rows: [["页面名称", "面辅料采购对账"], ["对账维度", "面辅料采购单号 + 面辅料SKU"], ["费用结构", "每条记录一行，费用字段上层预计、下层实际"], ["实际费用来源", "人工行内编辑、供应商账单 Excel 导入"]] },
-      { title: "核心规则", headers: ["场景", "规则"], rows: [["预计采购货款", "优先系统金额，否则入库数量或采购数量 × 预计单价"], ["实际采购货款", "优先录入金额，否则入库数量或采购数量 × 实际单价"], ["预计最终应付", "预计采购货款 + 预计调整金额"], ["实际最终应付", "实际供应商账单金额大于 0 时优先使用，否则使用实际采购货款，再加实际调整金额"], ["差异金额", "实际最终应付 - 预计最终应付"], ["导入", "只覆盖实际费用层，不自动确认"]] },
+      { title: "核心规则", headers: ["场景", "规则"], rows: [["预计采购货款", "优先系统金额，否则入库数量或采购数量 × 预计单价"], ["实际采购货款", "优先录入金额，否则入库数量或采购数量 × 实际单价"], ["最终应付金额", "采购货款 + 国内物流费用 + 调整金额"], ["差异金额", "当前 Demo 中差异金额 = 供应商账单金额 - 最终应付金额"], ["导入", "只覆盖实际费用层，不自动确认"]] },
     ]} />
 
     <FormModal open={Boolean(partialRow)} onClose={() => setPartialRow(null)} title={`部分确认 ${partialRow?.materialPurchaseNo ?? ""}`} widthClass="w-[760px]">
@@ -698,9 +716,9 @@ export default function MaterialPurchaseReconciliation({ onCreatePaymentRequest 
 
     <FormModal open={importOpen} onClose={() => setImportOpen(false)} title="导入供应商账单" widthClass="w-[1080px]">
       <div className="space-y-3 text-sm">
-        <div className="rounded border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-800">按“面辅料采购单号 + 面辅料SKU”匹配；只更新实际费用层，未填写字段按 0 处理，不自动确认。</div>
+        <div className="rounded border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-800">按“面辅料采购单号 + 面辅料SKU”匹配；只更新实际费用层，国内物流费用会参与最终应付金额，未填写字段按 0 处理，不自动确认。</div>
         <div className="flex items-center gap-2"><button className="inline-flex h-8 items-center gap-1 rounded border border-blue-300 px-3 text-blue-700" onClick={downloadTemplate}><FileSpreadsheet size={14} />下载模板</button><label className="inline-flex h-8 cursor-pointer items-center gap-1 rounded bg-[#009688] px-3 text-white"><Upload size={14} />上传 xls / xlsx<input className="hidden" type="file" accept=".xls,.xlsx,.csv,.txt" onChange={(event: ChangeEvent<HTMLInputElement>) => { const file = event.target.files?.[0]; if (file) void parseImportFile(file); event.currentTarget.value = ""; }} /></label><span className="text-xs text-gray-500">{importFileName || "未选择文件"}</span>{importing && <span className="text-xs text-blue-600">解析中...</span>}</div>
-        <div className="overflow-x-auto border border-gray-200"><table className="min-w-[1200px] text-left text-xs"><thead className="bg-gray-50"><tr>{["行号", ...importHeaders, "校验"].map((item) => <th key={item} className="whitespace-nowrap border-b px-2 py-2">{item}</th>)}</tr></thead><tbody>{importRows.map((row) => <tr key={row.rowNo} className={`border-b ${row.errors.length ? "bg-red-50" : ""}`}><td className="px-2 py-2">{row.rowNo}</td><td className="px-2 py-2">{row.materialPurchaseNo}</td><td className="px-2 py-2">{row.materialSku}</td><td className="px-2 py-2">{row.supplierName || "-"}</td><td className="px-2 py-2 text-right">{money(row.actualUnitPrice)}</td><td className="px-2 py-2 text-right">{money(row.actualPurchaseAmount)}</td><td className="px-2 py-2 text-right">{money(row.actualSupplierBillAmount)}</td><td className="px-2 py-2 text-right">{money(row.actualAdjustmentAmount)}</td><td className="px-2 py-2">{row.remark || "-"}</td><td className={`px-2 py-2 ${row.errors.length ? "text-red-600" : "text-emerald-600"}`}>{row.errors.join("；") || "通过"}</td></tr>)}{!importRows.length && <tr><td colSpan={10} className="p-10 text-center text-gray-400">请上传供应商账单文件</td></tr>}</tbody></table></div>
+        <div className="overflow-x-auto border border-gray-200"><table className="min-w-[1280px] text-left text-xs"><thead className="bg-gray-50"><tr>{["行号", ...importHeaders, "校验"].map((item) => <th key={item} className="whitespace-nowrap border-b px-2 py-2">{item}</th>)}</tr></thead><tbody>{importRows.map((row) => <tr key={row.rowNo} className={`border-b ${row.errors.length ? "bg-red-50" : ""}`}><td className="px-2 py-2">{row.rowNo}</td><td className="px-2 py-2">{row.materialPurchaseNo}</td><td className="px-2 py-2">{row.materialSku}</td><td className="px-2 py-2">{row.supplierName || "-"}</td><td className="px-2 py-2 text-right">{money(row.actualUnitPrice)}</td><td className="px-2 py-2 text-right">{money(row.actualPurchaseAmount)}</td><td className="px-2 py-2 text-right">{money(row.actualDomesticLogisticsFee)}</td><td className="px-2 py-2 text-right">{money(row.actualSupplierBillAmount)}</td><td className="px-2 py-2 text-right">{money(row.actualAdjustmentAmount)}</td><td className="px-2 py-2">{row.remark || "-"}</td><td className={`px-2 py-2 ${row.errors.length ? "text-red-600" : "text-emerald-600"}`}>{row.errors.join("；") || "通过"}</td></tr>)}{!importRows.length && <tr><td colSpan={11} className="p-10 text-center text-gray-400">请上传供应商账单文件</td></tr>}</tbody></table></div>
         <div className="flex items-center justify-between border-t pt-3"><span className="text-xs text-gray-500">共 {importRows.length} 条，错误 {importRows.filter((row) => row.errors.length).length} 条</span><div className="flex gap-2"><button className="h-8 rounded border px-4" onClick={() => { setImportRows([]); setImportFileName(""); }}>清空</button><button className="h-8 rounded bg-[#009688] px-4 text-white" onClick={confirmImport}>确认导入</button></div></div>
       </div>
     </FormModal>

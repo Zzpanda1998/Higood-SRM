@@ -19,6 +19,7 @@ import DesignLogicCard from "../../components/common/DesignLogicCard";
 import FormModal from "../../components/common/FormModal";
 import PageHeader from "../../components/common/PageHeader";
 import Toast from "../../components/common/Toast";
+import { getFirstLegPurchaseInfo, type FirstLegInfo } from "../../mock/firstLegPurchaseInfo";
 import { paymentRequestStore, upsertLogisticsPaymentRequest } from "../../mock/logisticsPaymentRequests";
 import type {
   LogisticsActualPaymentRecord,
@@ -103,6 +104,67 @@ function CurrencySummary({ row }: { row: PaymentRequest }) {
         </span>
       ))}
     </div>
+  );
+}
+
+function PurchaseInfoTable({ info }: { info: FirstLegInfo | undefined }) {
+  if (!info) return <div className="rounded border border-gray-200 bg-gray-50 p-8 text-center text-sm text-gray-500">暂无关联采购单基础信息</div>;
+  return (
+    <div className="overflow-x-auto border border-gray-200">
+      <table className="min-w-[1120px] text-left text-xs">
+        <thead className="bg-gray-50"><tr>{["采购单号", "采购类型", "SKU", "商品 / 物料名称", "采购数量", "采购金额", "币种", "采购人", "采购时间", "供应商", "状态"].map((item) => <th key={item} className="whitespace-nowrap border-b px-2 py-2 font-medium">{item}</th>)}</tr></thead>
+        <tbody>{info.purchases.map((item) => <tr key={item.purchaseNo} className="border-b last:border-0">
+          <td className="px-2 py-2 font-medium text-blue-600">{item.purchaseNo}</td>
+          <td className="px-2 py-2">{item.purchaseType}</td>
+          <td className="px-2 py-2">{item.sku}</td>
+          <td className="px-2 py-2">{item.itemName}</td>
+          <td className="px-2 py-2">{item.quantity}</td>
+          <td className="px-2 py-2 text-right">{money(item.amount)} {item.currency}</td>
+          <td className="px-2 py-2">{item.currency}</td>
+          <td className="px-2 py-2">{item.purchaser}</td>
+          <td className="px-2 py-2">{item.purchasedAt}</td>
+          <td className="px-2 py-2">{item.supplier}</td>
+          <td className="px-2 py-2">{item.status}</td>
+        </tr>)}</tbody>
+      </table>
+    </div>
+  );
+}
+
+function RelatedPurchaseInfoModal({ row, onClose }: { row: PaymentRequest | null; onClose: () => void }) {
+  const firstSource = row?.sources[0];
+  const info = getFirstLegPurchaseInfo(firstSource?.firstLegNo);
+  return (
+    <FormModal open={Boolean(row)} onClose={onClose} title="相关采购单基础信息" widthClass="w-[1180px]" sectionTitle="采购信息">
+      {row && <div className="space-y-4 text-sm">
+        <section>
+          <SectionTitle>一、请款单信息</SectionTitle>
+          <InfoGrid items={[
+            ["请款单号", row.requestNo],
+            ["来源对账单号", row.sources.map((item) => item.reconciliationNo).join("、")],
+            ["付款类型", row.paymentType],
+            ["收款人 / 头程物流商", row.payeeName],
+            ["请款总金额", amountSummary(row)],
+            ["请款状态", row.status],
+            ["付款状态", row.paymentStatus],
+          ]} />
+        </section>
+        <section>
+          <SectionTitle>二、头程物流信息</SectionTitle>
+          <InfoGrid items={[
+            ["头程物流单号", info?.firstLegNo ?? firstSource?.firstLegNo],
+            ["头程物流商", info?.provider ?? firstSource?.provider],
+            ["头程物流渠道", info?.channel ?? firstSource?.channel],
+            ["运输方式", info?.transportMethod ?? firstSource?.transportMethod],
+            ["头程状态", info?.status ?? firstSource?.reconciliationStatus],
+          ]} />
+        </section>
+        <section>
+          <SectionTitle>三、关联采购单信息</SectionTitle>
+          <PurchaseInfoTable info={info} />
+        </section>
+      </div>}
+    </FormModal>
   );
 }
 
@@ -667,6 +729,7 @@ function PageLogic() {
         title: "页面功能说明",
         headers: ["说明项", "内容"],
         rows: [
+          ["本次调整", "物流费用请款支持查看相关采购单基础信息，用于追溯头程物流费用对应了哪些采购单、SKU、采购金额和采购人。国内物流费用已归属到面辅料采购对账，物流请款只承接头程物流商 / 货代相关费用。"],
           ["物流费用请款", "物流费用请款用于承接物流费用对账结果并生成付款单。创建请款单后，用户可以多次申请付款。"],
           ["申请付款", "申请付款时自动带出收款信息、附件和历史请款记录。本次付款申请的币种只影响本次申请，不会改变付款单原始金额信息。"],
           ["财务付款结果查看", "物流费用请款用于承接物流费用对账结果并生成请款单，支持申请付款、请款记录、操作日志和财务付款结果查看。"],
@@ -677,6 +740,9 @@ function PageLogic() {
         title: "业务逻辑说明",
         headers: ["业务场景", "规则说明", "页面结果"],
         rows: [
+          ["国内物流费用归属", "国内物流费用由供应商发货产生", "调整到面辅料采购对账"],
+          ["物流请款追溯", "物流费用请款可查看关联采购信息", "付款时能追溯采购单、SKU、金额和采购人"],
+          ["费用拆分", "国内物流费用与头程物流费用分开", "避免供应商费用和货代费用混淆"],
           ["对账单生成请款单", "从物流费用对账勾选记录后进入创建页面", "创建后同步到物流费用请款列表"],
           ["删除右侧金额块", "付款金额区域不再拆出右侧独立小卡片", "金额信息集中展示"],
           ["自动带出收款信息", "申请付款时自动读取请款单收款信息", "用户无需重复录入"],
@@ -752,6 +818,7 @@ export default function LogisticsPaymentRequest({
   const [applyRecordRow, setApplyRecordRow] = useState<PaymentRequest | null>(null);
   const [paymentRecordRow, setPaymentRecordRow] = useState<PaymentRequest | null>(null);
   const [operationLogRow, setOperationLogRow] = useState<PaymentRequest | null>(null);
+  const [purchaseInfoRow, setPurchaseInfoRow] = useState<PaymentRequest | null>(null);
   const [applyTarget, setApplyTarget] = useState<PaymentRequest | null>(null);
   const [financeTarget, setFinanceTarget] = useState<PaymentRequest | null>(null);
   const [toast, setToast] = useState("");
@@ -1006,6 +1073,7 @@ export default function LogisticsPaymentRequest({
                     <button className="text-indigo-600 hover:text-indigo-800" onClick={() => setPaymentRecordRow(row)}>付款记录</button>
                     <button className="text-amber-600 hover:text-amber-800" onClick={() => setApplyRecordRow(row)}>请款记录</button>
                     <button className="text-purple-600 hover:text-purple-800" onClick={() => setOperationLogRow(row)}>操作日志</button>
+                    <button className="text-cyan-700 hover:text-cyan-900" onClick={() => setPurchaseInfoRow(row)}>查看采购信息</button>
                   </div>
                 </td>
               </tr>
@@ -1028,6 +1096,7 @@ export default function LogisticsPaymentRequest({
       <FormModal open={Boolean(paymentRecordRow)} onClose={() => setPaymentRecordRow(null)} title="付款记录" widthClass="w-[980px]" sectionTitle="付款记录">
         {paymentRecordRow && <PaymentRecordsView row={paymentRecordRow} onToast={showToast} />}
       </FormModal>
+      <RelatedPurchaseInfoModal row={purchaseInfoRow} onClose={() => setPurchaseInfoRow(null)} />
       <EditPaymentRequestModal key={editTarget?.id ?? "edit-empty"} row={editTarget} onClose={() => setEditTarget(null)} onSave={saveEditPaymentRequest} onToast={showToast} />
       <ApplyPaymentModal row={applyTarget} onClose={() => setApplyTarget(null)} onConfirm={confirmApplyPayment} />
       <FinancePaymentModal row={financeTarget} onClose={() => setFinanceTarget(null)} onConfirm={confirmFinancePayment} />
