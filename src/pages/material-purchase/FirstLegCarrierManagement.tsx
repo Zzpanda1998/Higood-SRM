@@ -5,6 +5,7 @@ import Toast from "../../components/common/Toast";
 import type {
   BillingMethod,
   CarrierCurrency,
+  ContainerPriceConfig,
   FirstLegCarrier,
   FirstLegCarrierChannel,
   FirstLegTransportMethod,
@@ -17,9 +18,16 @@ type CarrierModal = { mode: "create" | "edit" | "view"; row?: FirstLegCarrier } 
 type ChannelModal = { mode: "create" | "edit" | "view"; carrier: FirstLegCarrier; row?: FirstLegCarrierChannel } | null;
 
 const transportMethods: FirstLegTransportMethod[] = ["海卡", "海派", "空卡", "空派", "铁路", "快递", "卡航"];
-const billingMethods: BillingMethod[] = ["计费重", "实重", "体积"];
+const billingMethods: BillingMethod[] = ["计费重", "实重", "体积", "整柜"];
 const taxMethods: TaxMethod[] = ["报税", "不报税"];
 const currencies: CarrierCurrency[] = ["RMB", "USD", "IDR"];
+const containerCurrencies: ContainerPriceConfig["currency"][] = ["CNY", "USD", "IDR"];
+const defaultContainerPriceConfigs: ContainerPriceConfig[] = [
+  { containerType: "20GP", weightLimit: 18000, volumeLimit: 28, price: 12000, currency: "CNY" },
+  { containerType: "40GP", weightLimit: 22000, volumeLimit: 58, price: 18000, currency: "CNY" },
+  { containerType: "40HQ", weightLimit: 26000, volumeLimit: 69, price: 20000, currency: "CNY" },
+  { containerType: "45HQ", weightLimit: 29000, volumeLimit: 78, price: 23000, currency: "CNY" },
+];
 const controlClass = "h-8 w-full rounded border border-gray-300 bg-white px-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-100";
 const now = () => new Date().toLocaleString("zh-CN", { hour12: false });
 
@@ -67,6 +75,7 @@ const emptyChannel: ChannelDraft = {
   additionalWeightPrice: 0,
   unitPrice: 0,
   feeCurrency: "RMB",
+  containerPriceConfigs: defaultContainerPriceConfigs,
   taxMethod: "报税",
   includeTax: true,
   includeCustomsClearance: true,
@@ -164,7 +173,7 @@ export default function FirstLegCarrierManagement({
   const openChannel = (mode: "create" | "edit" | "view", carrier: FirstLegCarrier, row?: FirstLegCarrierChannel) => {
     setErrors({});
     setChannelModal({ mode, carrier, row });
-    setChannelDraft(row ? { ...row } : { ...emptyChannel, channelCode: nextChannelCode(), feeCurrency: carrier.settlementCurrency });
+    setChannelDraft(row ? { ...row, containerPriceConfigs: row.containerPriceConfigs?.map((item) => ({ ...item })) ?? defaultContainerPriceConfigs.map((item) => ({ ...item })) } : { ...emptyChannel, channelCode: nextChannelCode(), feeCurrency: carrier.settlementCurrency, containerPriceConfigs: defaultContainerPriceConfigs.map((item) => ({ ...item })) });
   };
   const validateCarrier = () => {
     const next: Record<string, string> = {};
@@ -199,6 +208,7 @@ export default function FirstLegCarrierManagement({
     if (channelDraft.minTransitDays != null && channelDraft.maxTransitDays != null && channelDraft.minTransitDays > channelDraft.maxTransitDays) next.minTransitDays = "最短运输天数不能大于最长运输天数";
     if (!channelDraft.billingMethod) next.billingMethod = "请选择计费方式";
     if (!channelDraft.feeCurrency) next.feeCurrency = "请选择费用币种";
+    if (channelDraft.billingMethod === "整柜" && channelDraft.containerPriceConfigs?.some((item) => item.weightLimit <= 0 || item.volumeLimit <= 0 || item.price < 0)) next.containerPriceConfigs = "请填写有效的重量限制、体积限制和整柜价格";
     if (!channelDraft.taxMethod) next.taxMethod = "请选择交税方式";
     if (!channelDraft.destinationCountry.trim()) next.destinationCountry = "请输入目的国家";
     setErrors(next);
@@ -287,6 +297,7 @@ export default function FirstLegCarrierManagement({
               <div className="flex items-start justify-between gap-3"><div><div className="font-medium text-gray-900">{row.channelName}</div><div className="mt-1 text-[11px] text-gray-400">{row.channelCode}</div></div><StatusTag status={row.status} /></div>
               <div className="mt-3 grid grid-cols-3 gap-2 text-xs"><div><span className="text-gray-400">运输</span><div className="mt-0.5 font-medium">{row.transportMethod}</div></div><div><span className="text-gray-400">时效</span><div className="mt-0.5 font-medium">{row.estimatedTransitDays} 天</div></div><div><span className="text-gray-400">计费</span><div className="mt-0.5 font-medium">{row.billingMethod}</div></div></div>
               <div className="mt-3 flex justify-between border-t border-dashed pt-2 text-xs text-gray-500"><span>{row.originPlace || "-"} → {row.destinationCountry}</span><span>{row.feeCurrency}</span></div>
+              {row.billingMethod === "整柜" && <div className="mt-2 line-clamp-2 text-[11px] leading-5 text-blue-600">{containerPriceSummary(row.containerPriceConfigs)}</div>}
             </button>;
           })}
           {selectedCarrier && !selectedCarrierChannels.length && <div className="py-20 text-center text-sm text-gray-400"><div>该物流商暂无渠道</div><button className="mt-3 text-blue-600" onClick={() => openChannel("create", selectedCarrier)}>新建第一条渠道</button></div>}
@@ -299,6 +310,7 @@ export default function FirstLegCarrierManagement({
         {selectedCarrier && selectedChannel ? <div className="flex-1 space-y-3 overflow-y-auto p-4">
           <div className="rounded-lg border border-blue-100 bg-white p-4 shadow-sm"><div className="flex items-start justify-between"><div><h3 className="text-base font-semibold">{selectedChannel.channelName}</h3><p className="mt-1 text-xs text-gray-500">{selectedCarrier.carrierName} · {selectedChannel.channelCode}</p></div><StatusTag status={selectedChannel.status} /></div><div className="mt-4 grid grid-cols-4 gap-3"><Metric label="运输方式" value={selectedChannel.transportMethod} /><Metric label="预计时效" value={`${selectedChannel.estimatedTransitDays} 天`} /><Metric label="计费方式" value={selectedChannel.billingMethod} /><Metric label="费用币种" value={selectedChannel.feeCurrency} /></div></div>
           <DetailSection title="时效与计费" items={[["时效区间", `${selectedChannel.minTransitDays ?? 0} - ${selectedChannel.maxTransitDays ?? 0} 天`], ["截单时间", selectedChannel.cutoffTime || "-"], ["发车 / 起飞", selectedChannel.departureFrequency || "-"], ["体积重除数", String(selectedChannel.volumeDivisor ?? 0)], ["最低计费重量", `${selectedChannel.minChargeWeight ?? 0} KG`], ["单价", `${selectedChannel.feeCurrency} ${selectedChannel.unitPrice ?? 0}`]]} />
+          {selectedChannel.billingMethod === "整柜" && <ContainerPriceDetail configs={selectedChannel.containerPriceConfigs ?? defaultContainerPriceConfigs} />}
           <DetailSection title="税务与服务" items={[["交税方式", selectedChannel.taxMethod], ["是否含税", selectedChannel.includeTax ? "是" : "否"], ["包清关", selectedChannel.includeCustomsClearance ? "是" : "否"], ["包派送", selectedChannel.includeDelivery ? "是" : "否"], ["支持带电", selectedChannel.supportBattery ? "是" : "否"], ["支持敏感货", selectedChannel.supportSensitiveGoods ? "是" : "否"]]} />
           <DetailSection title="路线信息" items={[["起运地", selectedChannel.originPlace || "-"], ["目的国家", selectedChannel.destinationCountry], ["目的仓", selectedChannel.destinationWarehouse || "-"], ["适用区域", selectedChannel.applicableArea || "-"], ["转运中心", selectedChannel.transferCenter || "-"], ["最大单箱", `${selectedChannel.maxBoxWeight ?? 0} KG / ${selectedChannel.maxBoxVolume ?? 0} m³`]]} />
           <div className="rounded-lg border bg-white p-4"><div className="text-xs font-semibold text-gray-700">渠道备注</div><div className="mt-2 text-sm leading-6 text-gray-600">{selectedChannel.remark || "暂无备注"}</div></div>
@@ -308,7 +320,8 @@ export default function FirstLegCarrierManagement({
     <DesignLogicCard sections={[
       { title: "页面定位", headers: ["项目", "说明"], rows: [["页面名称", "头程物流商管理"], ["所属模块", "头程物流"], ["页面目标", "维护头程物流商和运输渠道"], ["展示结构", "左侧物流商、中间渠道、右侧渠道详情"], ["下游去向", "头程物流单、物流费用对账"], ["核心规则", "一个物流商可以维护多个渠道"]] },
       { title: "三栏交互", headers: ["区域", "作用"], rows: [["左侧物流商", "切换物流商并查看状态、币种、付款方式及渠道数量"], ["中间渠道", "仅展示当前物流商渠道，支持新增和切换"], ["右侧详情", "即时查看渠道时效、计费、税务、路线和限制信息"], ["新增 / 编辑 / 完整查看", "继续使用居中分组弹窗，不改变保存逻辑"]] },
-      { title: "核心规则", headers: ["场景", "规则"], rows: [["新增物流商", "维护物流商基础信息"], ["新建渠道", "必须归属于某个物流商"], ["运输方式", transportMethods.join(" / ")], ["计费方式", billingMethods.join(" / ")], ["交税方式", taxMethods.join(" / ")], ["停用物流商", "不能被新头程物流单选择"], ["停用渠道", "不能被新头程物流单选择"], ["历史数据", "已经生成的头程物流单不受停用影响"]] },
+      { title: "页面功能说明", headers: ["说明"], rows: [["头程物流商渠道支持新增整柜计费方式。当渠道计费方式选择整柜时，系统展示整柜计费配置，用户可分别维护 20GP、40GP、40HQ、45HQ 的重量限制、体积限制和整柜价格。整柜价格用于后续头程物流费用按柜型核算。选择非整柜计费方式时，不展示整柜计费配置，原有计费逻辑保持不变。"]] },
+      { title: "业务逻辑说明", headers: ["业务场景", "规则说明", "页面结果"], rows: [["新增计费方式", "渠道计费方式新增【整柜】", "新建渠道时可选择整柜"], ["整柜计费", "整柜按货柜规格维护价格", "20GP、40GP、40HQ、45HQ 分别设置价格"], ["重量限制", "每种货柜规格维护重量上限", "页面显示 kg 单位"], ["体积限制", "每种货柜规格维护体积上限", "页面显示 cbm 单位"], ["价格维护", "每种货柜规格维护整柜价格", "保存后渠道详情可查看价格"], ["非整柜渠道", "选择计费重、实重、体积时不显示整柜配置", "原有功能不受影响"]] },
     ]} />
 
     {carrierModal && <Modal title={`${carrierModal.mode === "create" ? "新增" : carrierModal.mode === "edit" ? "编辑" : "查看"}头程物流商`} description="按章节维护物流商主体、联系人、结算及服务能力" onClose={() => setCarrierModal(null)} footer={carrierModal.mode !== "view" ? <><button className="h-9 rounded border px-4" onClick={() => setCarrierModal(null)}>取消</button><button className="h-9 rounded bg-blue-600 px-5 text-white" onClick={saveCarrier}>保存</button></> : undefined}>
@@ -329,6 +342,19 @@ function DetailSection({ title, items }: { title: string; items: Array<[string, 
   return <section className="rounded-lg border bg-white p-4"><div className="mb-3 text-xs font-semibold text-gray-700">{title}</div><div className="grid grid-cols-2 gap-x-5 gap-y-3">{items.map(([label, value]) => <div key={label} className="flex items-start justify-between gap-3 border-b border-dashed border-gray-100 pb-2 text-xs"><span className="text-gray-400">{label}</span><span className="text-right font-medium text-gray-700">{value}</span></div>)}</div></section>;
 }
 
+function containerPriceSummary(configs?: ContainerPriceConfig[]) {
+  return (configs ?? defaultContainerPriceConfigs).map((item) => `${item.containerType}：${item.price} ${item.currency}`).join("；");
+}
+
+function ContainerPriceDetail({ configs }: { configs: ContainerPriceConfig[] }) {
+  return <section className="rounded-lg border border-blue-100 bg-white p-4">
+    <div className="mb-3 text-xs font-semibold text-gray-700">整柜计费配置</div>
+    <div className="space-y-2">{configs.map((item) => <div key={item.containerType} className="grid grid-cols-[70px_1fr_1fr_1fr] items-center gap-3 rounded border border-gray-100 bg-slate-50 px-3 py-2 text-xs">
+      <span className="font-semibold text-blue-700">{item.containerType}</span><span><i className="mr-2 not-italic text-gray-400">重量限制</i>{item.weightLimit} kg</span><span><i className="mr-2 not-italic text-gray-400">体积限制</i>{item.volumeLimit} cbm</span><span><i className="mr-2 not-italic text-gray-400">整柜价格</i>{item.price} {item.currency}</span>
+    </div>)}</div>
+  </section>;
+}
+
 function CarrierForm({ draft, setDraft, errors, disabled }: { draft: CarrierDraft; setDraft: Dispatch<SetStateAction<CarrierDraft>>; errors: Record<string, string>; disabled: boolean }) {
   const update = <K extends keyof CarrierDraft>(key: K, value: CarrierDraft[K]) => setDraft((current) => ({ ...current, [key]: value }));
   const text = (key: keyof CarrierDraft, label: string, required = false, type = "text") => <Field label={label} required={required} error={errors[String(key)]}><input disabled={disabled} type={type} className={controlClass} value={String(draft[key] ?? "")} onChange={(event) => update(key, (type === "number" ? Number(event.target.value) : event.target.value) as CarrierDraft[typeof key])} /></Field>;
@@ -347,11 +373,30 @@ function ChannelForm({ carrier, draft, setDraft, errors, disabled, editing }: { 
   const text = (key: keyof ChannelDraft, label: string, required = false, type = "text", readOnly = false) => <Field label={label} required={required} error={errors[String(key)]}><input disabled={disabled || readOnly} type={type} className={controlClass} value={String(draft[key] ?? "")} onChange={(event) => update(key, (type === "number" ? Number(event.target.value) : event.target.value) as ChannelDraft[typeof key])} /></Field>;
   const select = (key: keyof ChannelDraft, label: string, options: string[], required = false) => <Field label={label} required={required} error={errors[String(key)]}><select disabled={disabled} className={controlClass} value={String(draft[key] ?? "")} onChange={(event) => update(key, event.target.value as ChannelDraft[typeof key])}>{options.map((item) => <option key={item}>{item}</option>)}</select></Field>;
   return <>
-    <FormSection title="一、渠道基础信息"><div className="grid grid-cols-2 gap-4"><Field label="所属物流商" required><input disabled className={controlClass} value={carrier.carrierName} /></Field>{text("channelCode", "渠道编码", false, "text", editing)}{text("channelName", "渠道名称", true)}{select("transportMethod", "运输方式", transportMethods, true)}{select("status", "状态", ["启用", "停用"], true)}</div></FormSection>
+    <FormSection title="一、渠道基础信息"><div className="grid grid-cols-2 gap-4"><Field label="所属物流商" required><input disabled className={controlClass} value={carrier.carrierName} /></Field>{text("channelCode", "渠道编码", false, "text", editing)}{text("channelName", "渠道名称", true)}{select("transportMethod", "运输方式", transportMethods, true)}{select("billingMethod", "计费方式", billingMethods, true)}{select("status", "状态", ["启用", "停用"], true)}</div></FormSection>
     <FormSection title="二、时效信息"><div className="grid grid-cols-2 gap-4">{text("estimatedTransitDays", "预计运输天数", true, "number")}{text("minTransitDays", "最短运输天数", false, "number")}{text("maxTransitDays", "最长运输天数", false, "number")}{text("cutoffTime", "截单时间", false, "time")}{text("departureFrequency", "发车 / 起飞频率")}</div></FormSection>
-    <FormSection title="三、计费信息"><div className="grid grid-cols-2 gap-4">{select("billingMethod", "计费方式", billingMethods, true)}{text("chargeWeightFactor", "计费重系数", false, "number")}{text("volumeDivisor", "体积重除数", false, "number")}{text("minChargeWeight", "最低计费重量 KG", false, "number")}{text("firstWeightPrice", "首重价格", false, "number")}{text("additionalWeightPrice", "续重价格", false, "number")}{text("unitPrice", "单价", false, "number")}{select("feeCurrency", "费用币种", currencies, true)}</div></FormSection>
+    {draft.billingMethod !== "整柜" && <FormSection title="三、计费信息"><div className="grid grid-cols-2 gap-4">
+      {draft.billingMethod === "计费重" && <>{text("chargeWeightFactor", "计费重系数", false, "number")}{text("volumeDivisor", "体积重除数", false, "number")}{text("minChargeWeight", "最低计费重量 KG", false, "number")}{text("unitPrice", "计费重单价", false, "number")}</>}
+      {draft.billingMethod === "实重" && <>{text("minChargeWeight", "最低计费重量 KG", false, "number")}{text("firstWeightPrice", "首重价格", false, "number")}{text("additionalWeightPrice", "续重价格", false, "number")}{text("unitPrice", "实重单价", false, "number")}</>}
+      {draft.billingMethod === "体积" && <>{text("volumeDivisor", "体积重除数", false, "number")}{text("unitPrice", "体积单价", false, "number")}</>}
+      {select("feeCurrency", "费用币种", currencies, true)}
+    </div></FormSection>}
+    {draft.billingMethod === "整柜" && <ContainerPriceEditor configs={draft.containerPriceConfigs ?? defaultContainerPriceConfigs} disabled={disabled} error={errors.containerPriceConfigs} onChange={(configs) => update("containerPriceConfigs", configs)} />}
     <FormSection title="四、税务与清关信息"><div className="grid grid-cols-2 gap-4">{select("taxMethod", "交税方式", taxMethods, true)}<Field label="是否含税"><BooleanChoice disabled={disabled} value={draft.includeTax} onChange={(value) => update("includeTax", value)} /></Field><Field label="是否包清关"><BooleanChoice disabled={disabled} value={draft.includeCustomsClearance} onChange={(value) => update("includeCustomsClearance", value)} /></Field><Field label="是否包派送"><BooleanChoice disabled={disabled} value={draft.includeDelivery} onChange={(value) => update("includeDelivery", value)} /></Field><Field label="报税说明" wide><textarea disabled={disabled} className="min-h-16 w-full rounded border p-2 text-sm" value={draft.taxRemark ?? ""} onChange={(event) => update("taxRemark", event.target.value)} /></Field></div></FormSection>
     <FormSection title="五、路线信息"><div className="grid grid-cols-2 gap-4">{text("originPlace", "起运地")}{text("destinationCountry", "目的国家", true)}{text("destinationWarehouse", "目的仓")}{text("applicableArea", "适用区域")}{text("transferCenter", "转运中心")}</div></FormSection>
     <FormSection title="六、限制与备注"><div className="grid grid-cols-2 gap-4"><Field label="是否支持带电"><BooleanChoice disabled={disabled} value={draft.supportBattery} onChange={(value) => update("supportBattery", value)} /></Field><Field label="是否支持液体"><BooleanChoice disabled={disabled} value={draft.supportLiquid} onChange={(value) => update("supportLiquid", value)} /></Field><Field label="是否支持敏感货"><BooleanChoice disabled={disabled} value={draft.supportSensitiveGoods} onChange={(value) => update("supportSensitiveGoods", value)} /></Field><Field label="是否支持普货"><BooleanChoice disabled={disabled} value={draft.supportNormalGoods} onChange={(value) => update("supportNormalGoods", value)} /></Field>{text("maxBoxWeight", "最大单箱重量", false, "number")}{text("maxBoxVolume", "最大单箱体积", false, "number")}<Field label="渠道备注" wide><textarea disabled={disabled} className="min-h-20 w-full rounded border p-2 text-sm" value={draft.remark ?? ""} onChange={(event) => update("remark", event.target.value)} /></Field></div></FormSection>
   </>;
+}
+
+function ContainerPriceEditor({ configs, disabled, error, onChange }: { configs: ContainerPriceConfig[]; disabled: boolean; error?: string; onChange: (configs: ContainerPriceConfig[]) => void }) {
+  const updateConfig = <K extends keyof ContainerPriceConfig>(index: number, key: K, value: ContainerPriceConfig[K]) => onChange(configs.map((item, itemIndex) => itemIndex === index ? { ...item, [key]: value } : item));
+  return <FormSection title="整柜计费配置">
+    <div className="space-y-3">{configs.map((item, index) => <div key={item.containerType} className="grid grid-cols-[110px_1fr_1fr_1.35fr] items-end gap-4 rounded-lg border border-gray-200 bg-slate-50/70 p-3">
+      <Field label="货柜规格"><input disabled className={`${controlClass} bg-gray-100 font-semibold text-blue-700`} value={item.containerType} /></Field>
+      <Field label="重量限制"><div className="flex"><input disabled={disabled} type="number" min="0" className={`${controlClass} rounded-r-none`} value={item.weightLimit} onChange={(event) => updateConfig(index, "weightLimit", Number(event.target.value))} /><span className="flex h-8 items-center rounded-r border border-l-0 bg-white px-3 text-xs text-gray-500">kg</span></div></Field>
+      <Field label="体积限制"><div className="flex"><input disabled={disabled} type="number" min="0" className={`${controlClass} rounded-r-none`} value={item.volumeLimit} onChange={(event) => updateConfig(index, "volumeLimit", Number(event.target.value))} /><span className="flex h-8 items-center rounded-r border border-l-0 bg-white px-3 text-xs text-gray-500">cbm</span></div></Field>
+      <Field label="整柜价格"><div className="flex"><input disabled={disabled} type="number" min="0" className={`${controlClass} rounded-r-none`} value={item.price} onChange={(event) => updateConfig(index, "price", Number(event.target.value))} /><select disabled={disabled} className="h-8 w-20 rounded-r border border-l-0 bg-white px-2 text-xs" value={item.currency} onChange={(event) => updateConfig(index, "currency", event.target.value as ContainerPriceConfig["currency"])}>{containerCurrencies.map((currency) => <option key={currency}>{currency}</option>)}</select></div></Field>
+    </div>)}</div>
+    {error && <div className="mt-2 text-xs text-red-500">{error}</div>}
+  </FormSection>;
 }
