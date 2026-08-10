@@ -1,8 +1,17 @@
 export type FirstLegTransportMethod = "海卡" | "海派" | "空卡" | "空派" | "铁路" | "快递" | "卡航";
-export type BillingMethod = "计费重" | "实重" | "体积";
+export type BillingMethod = "计费重" | "实重" | "体积" | "整柜";
 export type TaxMethod = "报税" | "不报税";
 export type CarrierStatus = "启用" | "停用";
 export type CarrierCurrency = "RMB" | "USD" | "IDR";
+export type ContainerCurrency = "CNY" | "USD" | "IDR";
+
+export interface ContainerPriceConfig {
+  containerType: "20GP" | "40GP" | "40HQ" | "45HQ";
+  weightLimit: number;
+  volumeLimit: number;
+  price: number;
+  currency: ContainerCurrency;
+}
 
 export interface FirstLegCarrier {
   id: string;
@@ -57,6 +66,7 @@ export interface FirstLegCarrierChannel {
   additionalWeightPrice?: number;
   unitPrice?: number;
   feeCurrency: CarrierCurrency;
+  containerPriceConfigs?: ContainerPriceConfig[];
   taxMethod: TaxMethod;
   includeTax?: boolean;
   includeCustomsClearance?: boolean;
