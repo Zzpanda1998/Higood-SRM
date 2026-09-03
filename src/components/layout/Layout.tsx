@@ -7,6 +7,8 @@ import TabsNav from "./TabsNav";
 export default function Layout({
   role,
   setRole,
+  subject,
+  setSubject,
   activeMenu,
   onMenuClick,
   tabs,
@@ -16,6 +18,8 @@ export default function Layout({
 }: {
   role: Role;
   setRole: (r: Role) => void;
+  subject: string;
+  setSubject: (value: string) => void;
   activeMenu: string;
   onMenuClick: (k: string) => void;
   tabs: TabItem[];
@@ -25,11 +29,11 @@ export default function Layout({
 }) {
   return (
     <div className="h-screen overflow-hidden bg-page">
-      <Header role={role} setRole={setRole} />
+      <Header role={role} setRole={setRole} subject={subject} setSubject={setSubject} />
       <TabsNav tabs={tabs} active={activeMenu} onSwitch={onTabSwitch} onClose={onTabClose} />
       <div className="flex h-[calc(100vh-88px)]">
         <Sidebar active={activeMenu} onClick={onMenuClick} />
-        <main className="min-w-0 flex-1 overflow-auto p-3">{children}</main>
+        <main className="min-w-0 flex-1 overflow-auto p-3">{subject !== "HiGOOD 香港公司" && <div className="mb-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">该主体权限规则暂未确认，当前仅展示预留效果。</div>}{children}</main>
       </div>
     </div>
   );

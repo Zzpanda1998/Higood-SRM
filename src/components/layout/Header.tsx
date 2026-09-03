@@ -14,7 +14,9 @@ const systems = [
 
 const roles: Role[] = ["系统管理员", "采购员", "采购主管", "供应商用户", "仓库人员", "质检人员", "财务人员", "管理者"];
 
-export default function Header({ role, setRole }: { role: Role; setRole: (r: Role) => void }) {
+const subjects = ["HiGOOD 香港公司", "印尼第三方进口公司（权限待确认）", "雅加达品牌运营公司（预留）"];
+
+export default function Header({ role, setRole, subject, setSubject }: { role: Role; setRole: (r: Role) => void; subject: string; setSubject: (value: string) => void }) {
   return (
     <header className="border-b bg-white">
       <div className="flex h-12 items-center justify-between px-4">
@@ -32,6 +34,7 @@ export default function Header({ role, setRole }: { role: Role; setRole: (r: Rol
           </nav>
         </div>
         <div className="flex shrink-0 items-center gap-3 text-sm">
+          <label className="hidden items-center gap-1 text-xs text-gray-500 xl:flex">当前主体：<select className="h-8 max-w-[210px] rounded border border-blue-200 bg-blue-50 px-2 text-sm text-blue-800 outline-none focus:border-brand" value={subject} onChange={(e) => setSubject(e.target.value)}>{subjects.map((item) => <option key={item}>{item}</option>)}</select></label>
           <select className="h-8 rounded border border-gray-200 px-2 outline-none focus:border-brand" value={role} onChange={(e) => setRole(e.target.value as Role)}>
             {roles.map((item) => (
               <option key={item}>{item}</option>

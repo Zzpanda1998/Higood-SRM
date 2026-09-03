@@ -289,6 +289,8 @@ export default function TransferBatchManagement({
         <div>总重量：<strong>{qty(rows.reduce((sum, batch) => sum + (batch.totalWeightKg ?? totalWeight(batch.records)), 0))} KG</strong></div>
       </section>
 
+      <section className="mb-3 rounded border border-blue-200 bg-white p-3"><div className="mb-3 flex items-center justify-between"><h2 className="text-sm font-semibold text-gray-900">清关与主体信息</h2><span className="rounded bg-emerald-50 px-2 py-1 text-xs text-emerald-700">正规清关 · 非灰清</span></div><div className="grid gap-3 text-xs md:grid-cols-4 xl:grid-cols-6">{[['头程物流单号','TB-2026-0004'],['出口主体','HiGOOD 香港公司'],['进口主体 / 进口商','印尼第三方进口公司'],['清关主体','印尼正规清关服务商'],['开票主体','HiGOOD 香港公司'],['清关方式','正规清关'],['关税','3,600.00 CNY'],['增值税','1,800.00 CNY'],['清关费','1,600.00 CNY'],['进口税费合计','7,000.00 CNY'],['是否可抵扣税票','是'],['税票号','INV-ID-2026-0804'],['报关单号','CUS-ID-2026-0004'],['报关附件','报关单_0004.pdf'],['税票附件','进口税票_0004.pdf'],['清关备注','资料齐全，正规申报']].map(([label,value])=><div key={label}><span className="text-gray-500">{label}</span><div className={`mt-1 min-h-8 rounded border px-2 py-1.5 ${label.includes('合计')?'border-blue-200 bg-blue-50 font-semibold text-blue-700':'bg-gray-50'}`}>{value}</div></div>)}</div><div className="mt-3 text-xs text-gray-500">进口税费合计 = 关税 + 增值税 + 清关费</div></section>
+
       <div className="overflow-x-auto border border-gray-200 bg-white">
         <table className="min-w-[2500px] table-fixed text-left text-xs text-gray-800">
           <colgroup>{[45,280,300,300,260,330,150,220,210,300].map((width, index) => <col key={index} style={{ width }} />)}</colgroup>
