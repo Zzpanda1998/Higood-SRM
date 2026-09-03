@@ -12,3 +12,9 @@ body {
 * {
   box-sizing: border-box;
 }
+
+@layer components {
+  .input {
+    @apply h-9 w-full rounded border border-gray-300 bg-white px-3 text-sm outline-none focus:border-blue-500;
+  }
+}
