@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { Plus, RefreshCw, Search, X } from "lucide-react";
 
 type MonitorRow = {
@@ -50,6 +50,14 @@ type GeneratedRecord = {
   processNo: string;
   status: string;
   operator: string;
+  processRecords?: {
+    no: string;
+    process: string;
+    receiveSku: string;
+    qty: number;
+    outputSku: string;
+    outputQty: number;
+  }[];
 };
 
 const initial: MonitorRow[] = [
@@ -264,9 +272,27 @@ export default function MaterialInventoryMonitor() {
       no: "DB-202609-0001",
       objectSku: "SKU001-WHITE",
       qty: 200,
-      processNo: "JG-202609-0001",
+      processNo: "2",
       status: "待调拨",
       operator: "张三",
+      processRecords: [
+        {
+          no: "JG-202609-0001",
+          process: "染色",
+          receiveSku: "SKU001-WHITE",
+          qty: 200,
+          outputSku: "SKU001-DYED",
+          outputQty: 196,
+        },
+        {
+          no: "JG-202609-0002",
+          process: "绣花",
+          receiveSku: "SKU001-DYED",
+          qty: 196,
+          outputSku: "SKU001-BLUE",
+          outputQty: 190,
+        },
+      ],
     },
     {
       monitorId: 2,
@@ -276,7 +302,7 @@ export default function MaterialInventoryMonitor() {
       no: "MP-202609-0002",
       objectSku: "SKU002-WHITE",
       qty: 1400,
-      processNo: "JG-202609-0002",
+      processNo: "-",
       status: "待下单",
       operator: "张三",
     },
@@ -757,14 +783,18 @@ function Modal({
   title,
   onClose,
   children,
+  large = false,
 }: {
   title: string;
   onClose: () => void;
   children: React.ReactNode;
+  large?: boolean;
 }) {
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/45 p-5 backdrop-blur-[2px]">
-      <div className="max-h-[92vh] w-full max-w-6xl overflow-auto rounded-xl border border-white/60 bg-slate-50 shadow-[0_24px_80px_rgba(15,23,42,0.28)]">
+      <div
+        className={`max-h-[94vh] w-full overflow-auto rounded-xl border border-white/60 bg-slate-50 shadow-[0_24px_80px_rgba(15,23,42,0.28)] ${large ? "min-h-[78vh] max-w-[1500px]" : "max-w-6xl"}`}
+      >
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white/95 px-6 py-4 backdrop-blur">
           <div>
             <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
@@ -1466,8 +1496,9 @@ function Detail({
   onClose: () => void;
 }) {
   const qty = suggested(r);
+  const [expandedNo, setExpandedNo] = useState<string | null>(null);
   return (
-    <Modal title={`库存监控生成记录 · ${r.sku}`} onClose={onClose}>
+    <Modal title={`库存监控生成记录 · ${r.sku}`} onClose={onClose} large>
       <div className="mb-5 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-100 bg-gradient-to-r from-blue-50 to-white px-5 py-3 text-sm font-semibold text-slate-800">
           监控对象概览
@@ -1503,29 +1534,121 @@ function Detail({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {records.map((x) => (
-              <tr key={x.no} className="transition hover:bg-blue-50/40">
-                <td className="px-4 py-4 text-slate-500">{x.time}</td>
-                <td className="px-4">{x.method}</td>
-                <td className="px-4">{x.type}</td>
-                <td className="px-4 font-medium text-blue-600">{x.no}</td>
-                <td className="px-4 font-medium text-slate-700">
-                  {x.objectSku}
-                </td>
-                <td className="px-4 font-semibold">{x.qty}</td>
-                <td className="px-4 text-blue-600">{x.processNo}</td>
-                <td className="px-4">
-                  <Tag text={x.status} />
-                </td>
-                <td className="px-4">{x.operator}</td>
-                <td className="px-4 whitespace-nowrap">
-                  <button className="mr-3 text-blue-600">查看{x.type}</button>
-                  {x.processNo !== "-" && (
-                    <button className="text-blue-600">查看加工单</button>
+            {records.map((x) => {
+              const expanded = expandedNo === x.no;
+              return (
+                <Fragment key={x.no}>
+                  <tr className="transition hover:bg-blue-50/40">
+                    <td className="px-4 py-4 text-slate-500">{x.time}</td>
+                    <td className="px-4">{x.method}</td>
+                    <td className="px-4">{x.type}</td>
+                    <td className="px-4 font-medium text-blue-600">{x.no}</td>
+                    <td className="px-4 font-medium text-slate-700">
+                      {x.objectSku}
+                    </td>
+                    <td className="px-4 font-semibold">{x.qty}</td>
+                    <td className="px-4">
+                      {x.processRecords?.length ? (
+                        <span className="rounded-full bg-blue-50 px-2.5 py-1 font-medium text-blue-700">
+                          {x.processRecords.length} 个
+                        </span>
+                      ) : (
+                        "-"
+                      )}
+                    </td>
+                    <td className="px-4">
+                      <Tag text={x.status} />
+                    </td>
+                    <td className="px-4">{x.operator}</td>
+                    <td className="px-4 whitespace-nowrap">
+                      <button
+                        onClick={() => setExpandedNo(expanded ? null : x.no)}
+                        className="rounded-md border border-blue-200 bg-blue-50 px-3 py-1.5 font-medium text-blue-700 transition hover:bg-blue-100"
+                      >
+                        {expanded ? "收起" : "展开"}
+                      </button>
+                    </td>
+                  </tr>
+                  {expanded && (
+                    <tr>
+                      <td colSpan={10} className="bg-slate-50/80 px-5 py-5">
+                        <div className="overflow-hidden rounded-xl border border-blue-100 bg-white shadow-sm">
+                          <div className="flex items-center justify-between border-b border-blue-100 bg-blue-50/70 px-4 py-3">
+                            <div>
+                              <div className="font-semibold text-slate-800">
+                                关联加工单记录
+                              </div>
+                              <div className="mt-0.5 text-[11px] text-slate-500">
+                                加工对象 SKU 即当前工序的接收 SKU，交出 SKU
+                                将传递给下一道工序。
+                              </div>
+                            </div>
+                            <span className="text-xs text-blue-700">
+                              调拨对象：{x.objectSku}
+                            </span>
+                          </div>
+                          {x.processRecords?.length ? (
+                            <table className="w-full text-left text-xs">
+                              <thead className="bg-slate-50 text-slate-500">
+                                <tr>
+                                  {[
+                                    "工序",
+                                    "加工单号",
+                                    "加工对象 SKU（接收 SKU）",
+                                    "加工数量",
+                                    "交出 SKU",
+                                    "交出数量",
+                                  ].map((label) => (
+                                    <th
+                                      key={label}
+                                      className="px-4 py-3 font-medium"
+                                    >
+                                      {label}
+                                    </th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100">
+                                {x.processRecords.map((process, index) => (
+                                  <tr key={process.no}>
+                                    <td className="px-4 py-3">
+                                      <span className="rounded bg-indigo-50 px-2 py-1 text-indigo-700">
+                                        {index + 1}. {process.process}
+                                      </span>
+                                    </td>
+                                    <td className="px-4 font-medium text-blue-600">
+                                      {process.no}
+                                    </td>
+                                    <td className="px-4 font-medium">
+                                      {process.receiveSku}
+                                    </td>
+                                    <td className="px-4">
+                                      {process.qty}
+                                      {r.unit}
+                                    </td>
+                                    <td className="px-4 font-medium text-emerald-700">
+                                      {process.outputSku}
+                                    </td>
+                                    <td className="px-4">
+                                      {process.outputQty}
+                                      {r.unit}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          ) : (
+                            <div className="py-10 text-center text-sm text-slate-400">
+                              暂无关联加工单记录
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
                   )}
-                </td>
-              </tr>
-            ))}
+                </Fragment>
+              );
+            })}
             {!records.length && (
               <tr>
                 <td colSpan={10} className="py-12 text-center text-gray-400">
@@ -1536,11 +1659,24 @@ function Detail({
           </tbody>
         </table>
       </div>
+      <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50/60 px-4 py-3 text-xs leading-5 text-slate-600">
+        <div className="font-semibold text-blue-800">SKU 链路说明</div>
+        <div className="mt-1">
+          调拨单对象 SKU = 调拨时选择的胚布 / 原料 SKU；第一道加工单接收 SKU =
+          调拨单对象 SKU；后续加工单接收 SKU = 上一道加工单交出
+          SKU；最后一道加工单交出 SKU = 当前监控目标 SKU。
+        </div>
+        <div className="mt-1 text-slate-500">
+          展开字段包含：加工单号、加工对象 SKU（即接收 SKU）、加工数量、交出
+          SKU、交出数量。
+        </div>
+      </div>
       <div className="mt-3 flex items-center gap-2 rounded-lg bg-slate-100 px-3 py-2 text-xs text-slate-500">
         <span className="flex h-4 w-4 items-center justify-center rounded-full bg-slate-300 text-[10px] text-white">
           i
         </span>
-        仅记录该监控 SKU 历史生成的采购单、调拨单、加工单及其当前状态。
+        查看该监控 SKU 历史生成的子单据及加工链路；点击操作列“展开 /
+        收起”可在当前行查看或隐藏关联加工单。
       </div>
     </Modal>
   );
@@ -1730,11 +1866,20 @@ function Prd() {
       "允许生成调拨单",
     ],
     ["采购触发", "库存不足且无法满足调拨规则", "允许生成面辅料采购单"],
-    ["加工单", "采购或调拨时同步生成加工单记录", "只展示 Mock 关联单号"],
+    [
+      "加工链路",
+      "首道接收 SKU 为调拨对象，后续接收 SKU 为上道交出 SKU，末道交出目标 SKU",
+      "使用两道加工 Mock 数据展示完整流转",
+    ],
     [
       "查看记录",
-      "迷你列表仅展示该 SKU 的子单据及状态",
-      "快速追踪采购、调拨和加工单",
+      "查看该监控 SKU 历史子单据记录及对应加工链路",
+      "操作列通过展开 / 收起在当前行展示关联加工单",
+    ],
+    [
+      "加工单字段",
+      "加工单号、加工对象 SKU（即接收 SKU）、加工数量、交出 SKU、交出数量",
+      "不再混用调拨单对象 SKU 与加工单接收 SKU",
     ],
     ["监控持续", "生成单据不会关闭或改变监控对象", "后续可重复生成并留痕"],
     ["操作日志", "每次编辑、生成及数量修改均记录", "支持追溯"],
@@ -1748,7 +1893,11 @@ function Prd() {
         维度持续判断库存是否不足。每个监控对象固定提供编辑、生成调拨单、生成面辅料采购单和查看记录操作。调拨或采购数量均按“目标库存数
         − 当前库存”计算；需要加工时，对象为胚布 / 原料
         SKU，并同步生成对应工序的加工单 Mock
-        记录。生成单据后监控对象保持不变，查看记录用于追溯历史采购单、调拨单、加工单和操作日志。
+        记录。生成单据后监控对象保持不变；查看记录弹窗用于查看某个监控 SKU
+        历史生成的子单据记录及加工链路，操作列使用“展开 /
+        收起”在当前行展示关联加工单。调拨单对象 SKU 是调拨时选择的
+        SKU；第一道加工单接收 SKU 是调拨对象，后续接收 SKU 是上一道加工单交出
+        SKU，最后一道加工单交出 SKU 是监控目标 SKU。
       </p>
       <div className="mt-4 grid grid-cols-2 gap-2 text-xs md:grid-cols-4">
         {[
