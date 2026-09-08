@@ -18,9 +18,28 @@ export type TransferBatchStatus =
   | "已入库"
   | string;
 
+export type FirstLegTrackingNodeStatus = "未开始" | "进行中" | "已完成" | "异常";
+
+export type FirstLegTrackingNode = {
+  id: string;
+  nodeName: string;
+  nodeStatus: FirstLegTrackingNodeStatus;
+  estimatedTime?: string;
+  actualTime?: string;
+  operator?: string;
+  updatedAt?: string;
+  remark?: string;
+};
+
 export type TransferBatch = {
   batchNo: string;
   batchName: string;
+  /** 船司或货代提供的提单号 */
+  billOfLadingNo?: string;
+  /** 船司 / 承运公司名称 */
+  shippingLineName?: string;
+  billOfLadingRemark?: string;
+  trackingNodes?: FirstLegTrackingNode[];
   transferCenter: string;
   destinationWarehouse: string;
   carrier: string;

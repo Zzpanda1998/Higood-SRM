@@ -4,6 +4,9 @@ import type { FirstLegCarrier, FirstLegCarrierChannel } from "../../types/firstL
 
 export interface CreateTransferBatchForm {
   batchNo: string;
+  billOfLadingNo: string;
+  shippingLineName: string;
+  billOfLadingRemark: string;
   sourceRegion: string;
   warehouse: string;
   shippingType: string;
@@ -25,6 +28,9 @@ export interface CreateTransferBatchForm {
 
 export const defaultCreateTransferBatchForm: CreateTransferBatchForm = {
   batchNo: "20260609",
+  billOfLadingNo: "",
+  shippingLineName: "",
+  billOfLadingRemark: "",
   sourceRegion: "CN",
   warehouse: "",
   shippingType: "",
@@ -80,14 +86,31 @@ export default function CreateTransferBatchModal({
   onSubmit,
   carriers,
   channels,
+  initialBatch,
 }: {
   open: boolean;
   onClose: () => void;
   onSubmit: (batch: TransferBatch) => void;
   carriers: FirstLegCarrier[];
   channels: FirstLegCarrierChannel[];
+  initialBatch?: TransferBatch;
 }) {
-  const [form, setForm] = useState<CreateTransferBatchForm>(defaultCreateTransferBatchForm);
+  const [form, setForm] = useState<CreateTransferBatchForm>(() => initialBatch ? {
+    ...defaultCreateTransferBatchForm,
+    batchNo: initialBatch.batchNo,
+    billOfLadingNo: initialBatch.billOfLadingNo ?? "",
+    shippingLineName: initialBatch.shippingLineName ?? "",
+    billOfLadingRemark: initialBatch.billOfLadingRemark ?? "",
+    sourceRegion: initialBatch.sourceRegion ?? "CN",
+    warehouse: initialBatch.warehouse ?? initialBatch.destinationWarehouse,
+    shippingType: initialBatch.transportMethod ?? initialBatch.shippingType ?? initialBatch.carrier,
+    area: initialBatch.area ?? initialBatch.destinationCountry ?? "",
+    logisticsCompany: initialBatch.carrierName ?? initialBatch.logisticsProvider ?? "",
+    carrierId: initialBatch.carrierId ?? "",
+    channelId: initialBatch.channelId ?? "",
+    expectedBandungArrivalTime: initialBatch.expectedBandungArrivalAt ?? "",
+    remark: initialBatch.remark,
+  } : defaultCreateTransferBatchForm);
   const [errors, setErrors] = useState<Errors>({});
 
   if (!open) return null;
@@ -106,12 +129,12 @@ export default function CreateTransferBatchModal({
   const submit = () => {
     const nextErrors: Errors = {};
     if (!form.batchNo.trim()) nextErrors.batchNo = "请输入货运批次";
-    if (!form.sourceRegion) nextErrors.sourceRegion = "请选择货源地区";
-    if (!form.warehouse) nextErrors.warehouse = "请选择仓库";
-    if (!form.shippingType) nextErrors.shippingType = "请选择货运类型";
-    if (!form.area) nextErrors.area = "请选择区域";
-    if (!form.carrierId) nextErrors.logisticsCompany = "请选择物流商";
-    if (!form.channelId) nextErrors.shippingType = "请选择物流渠道";
+    if (!initialBatch && !form.sourceRegion) nextErrors.sourceRegion = "请选择货源地区";
+    if (!initialBatch && !form.warehouse) nextErrors.warehouse = "请选择仓库";
+    if (!initialBatch && !form.shippingType) nextErrors.shippingType = "请选择货运类型";
+    if (!initialBatch && !form.area) nextErrors.area = "请选择区域";
+    if (!initialBatch && !form.carrierId) nextErrors.logisticsCompany = "请选择物流商";
+    if (!initialBatch && !form.channelId) nextErrors.shippingType = "请选择物流渠道";
     numericFields.forEach((key) => {
       const value = form[key];
       if (!value) return;
@@ -128,6 +151,10 @@ export default function CreateTransferBatchModal({
     onSubmit({
       batchNo: form.batchNo.trim(),
       batchName: form.batchNo.trim(),
+      billOfLadingNo: form.billOfLadingNo.trim(),
+      shippingLineName: form.shippingLineName.trim(),
+      billOfLadingRemark: form.billOfLadingRemark.trim(),
+      trackingNodes: initialBatch?.trackingNodes ?? [],
       transferCenter: form.sourceRegion === "CN" ? "广州转运中心" : `${form.sourceRegion}转运中心`,
       destinationWarehouse: form.warehouse,
       carrier: form.shippingType,
@@ -184,7 +211,7 @@ export default function CreateTransferBatchModal({
       <div className="flex max-h-[85vh] w-[min(920px,calc(100vw-24px))] flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-2xl">
         <div className="flex shrink-0 items-center justify-between border-b border-gray-200 px-5 py-4">
           <div>
-            <div className="text-base font-semibold text-gray-900">创建头程物流</div>
+            <div className="text-base font-semibold text-gray-900">{initialBatch ? "编辑头程物流" : "创建头程物流"}</div>
             <div className="mt-1 text-xs text-gray-500">维护运输批次、费用、交付状态与预计到达信息</div>
           </div>
           <button className="rounded-md px-3 py-1.5 text-sm text-gray-500 hover:bg-gray-100" onClick={close} aria-label="关闭创建头程物流">关闭</button>
@@ -196,6 +223,9 @@ export default function CreateTransferBatchModal({
             <FieldRow label="货运批次" required error={errors.batchNo}><input className={inputClass} value={form.batchNo} onChange={(event) => update("batchNo", event.target.value)} /></FieldRow>
             <FieldRow label="物流商" required><select className={inputClass} value={form.carrierId} onChange={(event) => setForm((current) => ({ ...current, carrierId: event.target.value, channelId: "", logisticsCompany: carriers.find((item) => item.id === event.target.value)?.carrierName ?? "", shippingType: "" }))}><option value="">请选择启用物流商</option>{enabledCarriers.map((item) => <option key={item.id} value={item.id}>{item.carrierName}</option>)}</select></FieldRow>
             <FieldRow label="物流渠道" required><select className={inputClass} value={form.channelId} onChange={(event) => { const channel = channels.find((item) => item.id === event.target.value); setForm((current) => ({ ...current, channelId: event.target.value, shippingType: channel?.transportMethod ?? "", area: channel?.destinationCountry ?? "", warehouse: channel?.destinationWarehouse ?? current.warehouse })); }}><option value="">请选择启用渠道</option>{enabledChannels.map((item) => <option key={item.id} value={item.id}>{item.channelName}</option>)}</select></FieldRow>
+            <FieldRow label="提单号"><input className={inputClass} value={form.billOfLadingNo} placeholder="请输入提单号（选填）" onChange={(event) => update("billOfLadingNo", event.target.value)} /></FieldRow>
+            <FieldRow label="船司名"><input className={inputClass} value={form.shippingLineName} placeholder="如 COSCO、MSC、MAERSK、EMC（选填）" onChange={(event) => update("shippingLineName", event.target.value)} /></FieldRow>
+            <FieldRow label="提单号备注"><input className={inputClass} value={form.billOfLadingRemark} placeholder="可填写多个提单号说明" onChange={(event) => update("billOfLadingRemark", event.target.value)} /></FieldRow>
             <FieldRow label="货源地区" required error={errors.sourceRegion}><select className={inputClass} value={form.sourceRegion} onChange={(event) => update("sourceRegion", event.target.value)}><option>CN</option><option>ID</option><option>US</option></select></FieldRow>
             <FieldRow label="仓库" required error={errors.warehouse}><select className={inputClass} value={form.warehouse} onChange={(event) => update("warehouse", event.target.value)}><option value="">请选择仓库</option><option>印尼仓</option><option>广州主仓</option><option>深圳仓</option><option>面辅料仓</option><option>中转仓</option></select></FieldRow>
             <FieldRow label="货运类型" required error={errors.shippingType}><select className={inputClass} value={form.shippingType} onChange={(event) => update("shippingType", event.target.value)}><option value="">请选择货运类型</option><option>空运</option><option>海运</option><option>陆运</option><option>快递</option></select></FieldRow>
@@ -231,7 +261,7 @@ export default function CreateTransferBatchModal({
         </div>
         <div className="flex shrink-0 justify-end gap-3 border-t border-gray-200 bg-white px-5 py-3">
           <button className="h-9 rounded-md border border-gray-300 px-4 text-sm text-gray-700 hover:bg-gray-50" onClick={close}>取消</button>
-          <button className="h-9 rounded-md bg-brand px-5 text-sm font-medium text-white" onClick={submit}>立即提交</button>
+          <button className="h-9 rounded-md bg-brand px-5 text-sm font-medium text-white" onClick={submit}>{initialBatch ? "保存修改" : "立即提交"}</button>
         </div>
       </div>
     </div>
